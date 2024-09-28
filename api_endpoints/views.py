@@ -1856,8 +1856,97 @@ class MoveFolderSerializer(serializers.Serializer):
         
         return data
 
+class MoveFolderAPIView(APIView):
 
+    @swagger_auto_schema(
+        operation_description="Move a folder to a different folder or home directory.",
+        request_body=MoveFolderSerializer,
+        responses={
+            200: openapi.Response("Folder moved successfully."),
+            400: openapi.Response("Bad request, folder or destination not found."),
+            403: openapi.Response("Permission denied."),
+        }
+    )
+    def post(self, request):
+        serializer = MoveFolderSerializer(data=request.data)
+        if serializer.is_valid():
+            folder = serializer.validated_data['folder']
+            destination = serializer.validated_data.get('destination')  # Optional destination
 
+            if destination:
+                if not (destination.owner == request.user or destination.is_shared_with(request.user, role=3)):
+                    return Response({"status": "Error", "message": "You do not have permission to move to this destination."}, status=status.HTTP_403_FORBIDDEN)
+            else:
+                destination = None
+
+            # Generate new folder path
+            folder_name = folder.name
+            destination_path = destination.get_path() + f'/{folder_name}' if destination else request.user.username + f'/{folder_name}'
+            
+            counter = 1
+            while os.path.exists(destination_path):
+                destination_path = destination.get_path() + f'/{folder_name} ({counter})' if destination else request.user.username + f'/{folder_name} ({counter})'
+                counter += 1
+
+            # Prevent moving folder into itself
+            if folder == destination:
+                return Response({"status": "Error", "message": "Cannot move folder into itself."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Move the folder
+            os.rename(folder.get_path(), destination_path)
+            folder.parent = destination
+            folder.save()
+
+            return Response({"status": "Success", "message": "Folder moved successfully."}, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class MoveFileAPIView(APIView):
+
+    @swagger_auto_schema(
+        operation_description="Move a file to a different folder or home directory.",
+        request_body=MoveFileSerializer,
+        responses={
+            200: openapi.Response("File moved successfully."),
+            400: openapi.Response("Bad request, file or destination not found."),
+            403: openapi.Response("Permission denied."),
+        }
+    )
+    def post(self, request):
+        serializer = MoveFileSerializer(data=request.data)
+        if serializer.is_valid():
+            file = serializer.validated_data['file']
+            destination = serializer.validated_data.get('destination')  # Optional destination
+
+            if destination:
+                if not (destination.owner == request.user or destination.is_shared_with(request.user, role=3)):
+                    return Response({"status": "Error", "message": "You do not have permission to move to this destination."}, status=status.HTTP_403_FORBIDDEN)
+            else:
+                destination = None
+
+            # Generate new file path
+            file_name, ext = os.path.splitext(file.name)
+            destination_path = destination.get_path() + f'/{file_name}{ext}' if destination else request.user.username + f'/{file_name}{ext}'
+            
+            counter = 1
+            while os.path.exists(destination_path):
+                destination_path = destination.get_path() + f'/{file_name} ({counter}){ext}' if destination else request.user.username + f'/{file_name} ({counter}){ext}'
+                counter += 1
+
+            # Check if file is already in the destination
+            if file.parent == destination:
+                return Response({"status": "Error", "message": "File is already in the destination."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Move the file
+            os.rename(file.get_full_path(), destination_path)
+            file.name = os.path.basename(destination_path)
+            file.file = destination_path
+            file.parent = destination
+            file.save()
+
+            return Response({"status": "Success", "message": "File moved successfully."}, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 # # Create your views here.
 # def sign_up(request):
 #     if request.method == 'POST':

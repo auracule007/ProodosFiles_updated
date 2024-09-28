@@ -19,15 +19,19 @@ urlpatterns = [
     path('get-folders/', views.UserFoldersAPIView.as_view(), name='user-folders'), #added
     path('user-files/', views.UserFilesAPIView.as_view(), name='user-files'), #added
     path("view_fo/", views.FolderViewAPIView.as_view(), name="view_fo"),
-    path("fo/sharing/", views.ShareFolderAPIView.as_view(), name="fold_shar"),
+
     path('fi/unzip/', views.UnzipFileAPIView.as_view(), name="unzip_file_api"),
     path('fi/rename/', views.RenameFileAPIView.as_view(), name="rename_file_api"),
     path('fi/copy/', views.CopySharedFileAPIView.as_view(), name='copy_shared_file_api'),
+    path("fi/move/", views.MoveFileAPIView.as_view(), name="move_file_api"),
+
+    path("fo/sharing/", views.ShareFolderAPIView.as_view(), name="fold_shar"),
     path("fo/star/", views.StarFolderAPIView.as_view(), name="star_folder_api"),
     path("fo/bin/", views.BinFolderAPIView.as_view(), name="bin_fo_api"),
     path("fo/del/", views.DeletePermAPIView.as_view(), name="delete_perm_api"),
     path("fo/zip/", views.ZipFolderAPIView.as_view(), name="zip_folder_api"),
     path("fo/rename/", views.RenameFolderAPIView.as_view(), name="remove_folder_api"),
+    path("fo/move/", views.MoveFolderAPIView.as_view(), name="move_folder_api"),
 
     path('serve-dc-img/<uuid:file_id>/<str:image_name>/', views.serve_secure_doc_image, name='serve_img'),
     # your other routes
