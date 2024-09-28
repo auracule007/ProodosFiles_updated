@@ -385,6 +385,8 @@ class LoginView(APIView):
         print(eval(str(request.data)))
         if serializer.is_valid():
             user = serializer.validated_data
+            if Token.objects.filter(user=user).exists():
+                Token.objects.get(user=user).delete()
             token, created = Token.objects.get_or_create(user=user)
             response = {'token': token.key, 'username': user.username, 'full_name': user.full_name, "email": user.email}
             print(response)
@@ -1852,6 +1854,7 @@ class MoveFolderSerializer(serializers.Serializer):
                 raise serializers.ValidationError("The destination folder does not exist.")
         
         return data
+
 
 
 # # Create your views here.
