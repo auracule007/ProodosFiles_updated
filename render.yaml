@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: ProodosF
+    buildCommand: "./build.sh"
+    env: python
+    startCommand:  "gunicorn ProodosF.wsgi:application"
