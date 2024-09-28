@@ -4,6 +4,7 @@ import hashlib
 import os
 import re
 import shutil
+import zipfile
 import chardet
 from django.conf import settings
 from django.urls import reverse
