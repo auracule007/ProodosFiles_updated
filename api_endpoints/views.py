@@ -1488,7 +1488,371 @@ class StarFileAPIView(APIView):
                 return Response({"status": 200, "responseText": "This file has been starred." if file.starred or request.user.starred_files.contains(file) else "This file has been unstarred"})
             except:
                 return Response({"status": 404, "responseText": "This file was not found"}, status=404)
+
+class FileBaseSerializer(serializers.Serializer):
+    file_id = serializers.UUIDField()
+
+class StarFileAPIView(APIView):
+    serializer_class = FileBaseSerializer
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        file_id = request.POST.get('file_id')
+        serializer = self.serializer_class(file_id)
+        if serializer.is_valid():
+            try:
+                file = File.objects.get(id=file_id)
+                if not file.has_perm(request.user.id):
+                    return Response({"status": 403, "responseText": "Action denied"}, status=status.HTTP_403_FORBIDDEN)
+                if file.owner == request.user:
+                    if file.starred:
+                        file.starred = False
+                    else:
+                        file.starred = True
+                else:
+                    user = request.user
+                    if user.starred_files.contains(file):
+                        user.starred_files.remove(file)
+                    else:
+                        user.starred_files.add(file)
+                    user.save()
+                file.save()
+                return Response({"status": 200, "responseText": "This file has been starred." if file.starred or request.user.starred_files.contains(file) else "This file has been unstarred"}, status=status.HTTP_200_OK)
+            except:
+                return Response({"status": 404, "responseText": "This file was not found"}, status=status.HTTP_404_NOT_FOUND)
             
+def get_file_or_404(model, item_id):
+    try:
+        return model.objects.binned_items().get(id=item_id)
+    except model.DoesNotExist:
+        try:
+            return model.objects.all_with_binned().get(id=item_id)
+        except model.DoesNotExist:
+            raise Http404("Item does not exist or is binned")
+
+class BinFileAPIView(APIView):
+    serializer_class = FileBaseSerializer
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        file_id = request.POST.get('file_id')
+        serializer = self.serializer_class(file_id)
+        if serializer.is_valid():
+            try:
+                file = Folder.objects.get(id=file_id)
+                if not file.is_editor(request.user.id):
+                    if not file.has_perm(request.user.id):
+                        return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+                else:
+                    file.access_list.remove(request.user)
+                    file.save()
+                    if SharedFile.objects.filter(user=request.user, file=file).exists():
+                        SharedFile.objects.get(user=request.user, file=file).delete()
+                    return Response({"status": 200, "responseText": "You have removed this file from your view."}, status=status.HTTP_200_OK)
+                if not file.binned:
+                    file.binned = datetime.now()
+                    file.save()
+                    return Response({"status": 200, "responseText": "This file has been moved to bin"}, status=status.HTTP_200_OK)
+                else:
+                    file.binned = None
+                    file.save()
+                    return Response({"status": 200, "responseText": "This file has been restored"}, status=status.HTTP_200_OK)
+            except:
+                return Response({"status": 404, "responseText": "This file was not found."}, status=status.HTTP_404_NOT_FOUND)
+
+class FolderBaseSerializer(APIView):
+    folder_id = serializers.UUIDField()
+
+class UnzipFileAPIView(APIView):
+    serializer_class = FileBaseSerializer
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        serializer = self.serializer_class(request.data)
+        if serializer.is_valid():
+            try:
+                file = File.objects.get(id=request.POST.get('file_id'))
+                if not file.is_editor(request.user.id):
+                    return Response({"status": 403, "responseText": "Action denied."}, status=status.HTTP_403_FORBIDDEN)
+                if not file.get_extension() == "zip":
+                    return Response({"responseText": "You are trying to unzip a non zip file.", "status": 403}, status=status.HTTP_403_FORBIDDEN)
+                
+                file_path = apply_correct_path(file.get_full_path())
+                unzip_dir = os.path.join(os.path.splitext(file_path)[0])
+                print(unzip_dir)
+
+                try:
+                    os.makedirs(os.path.dirname(unzip_dir))
+                except:
+                    pass
+
+                with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                    zip_ref.extractall(unzip_dir)
+
+                root_folder = file.parent
+                parent_folder = Folder.objects.create(
+                    name=file.name.replace('.zip', ''),
+                    parent=root_folder,
+                    owner=request.user
+                )  
+
+                # Iterate through all directories and files in the unzipped content
+                for root, dirs, files in os.walk(unzip_dir):
+                    # Calculate the relative path from the root of the unzipped directory
+                    relative_path = os.path.relpath(root, unzip_dir)
+
+                #     # Find or create the current parent folder in the database, starting from the root folder
+                    if relative_path != '.':
+                        parent_folder, created = Folder.objects.get_or_create(
+                            name=os.path.basename(root),
+                            parent=root_folder if relative_path == '.' else parent_folder,
+                            owner=request.user
+                        )
+                    else:
+                        parent_folder
+
+                    # Create subfolders in the database
+                    for dir_name in dirs:
+                        Folder.objects.get_or_create(
+                            name=dir_name,
+                            parent=parent_folder,
+                            owner=request.user
+                        )
+
+                    # Create file entries in the database
+                    for file_name in files:
+                        file_path = os.path.join(root, file_name)
+                        relative_file_path = os.path.relpath(file_path, settings.MEDIA_ROOT)
+                        file_size = os.path.getsize(file_path)  # Get the file size in bytes
+
+            # Create the file entry in the correct folder in the database
+                        File.objects.create(
+                            name=file_name,
+                            file=relative_file_path,
+                            owner=request.user,
+                            parent=parent_folder,
+                            size=file_size  # Set the file size
+                        )
+                return Response({"status": 200, "responseText": "This file has been unzipped."}, status=status.HTTP_200_OK)
+            except:
+                return Response({"status": 404, "responseText": "This file was not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+def create_zip_file(folder, save_path):
+    """
+    Create a zip file of the folder and save it to the specified path.
+    
+    :param folder: The Folder object to be zipped.
+    :param save_path: The path where the zip file should be saved.
+    :return: The path to the created zip file.
+    """
+    folder_path = apply_correct_path(folder.get_path())
+    zip_filename = os.path.join(save_path, f"{folder.name}.zip")
+    
+    with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, os.path.join(folder_path, '..'))
+                zip_file.write(file_path, arcname)
+    
+    return zip_filename
+
+class ZipFolderAPIView(APIView):
+    serializer_class = FolderBaseSerializer
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        serializer = self.serializer_class(request.data)
+        if serializer.is_valid():
+            try:
+                folder = Folder.objects.get(id=request.POST.get('folder_id'))
+                if not folder.is_editor(request.user.id):
+                    return Response({"status": 403, "responseText": "Action denied"}, status=status.HTTP_403_FORBIDDEN)
+                save_path = folder.parent.get_path() if folder.parent else os.path.join(settings.MEDIA_ROOT, request.user.username)
+
+                zip_file = create_zip_file(folder, save_path)
+
+                File.objects.create(
+                    name=f"{folder.name}.zip",
+                    file=zip_file,
+                    owner=request.user,
+                    size=os.path.getsize(zip_file),
+                    parent=folder.parent
+                )
+            except:
+                return Response({"status": 404, "responseText": "This folder was not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class DeletePermFileAPIView(APIView):
+    serializer_class  = FileBaseSerializer
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        serializer = self.serializer_class(request.data)
+        if serializer.is_valid():
+            try:
+                file = File.objects.get(id=request.POST.get('file_id'))
+                if file.is_editor(request.user.id):
+                    file.delete()
+                    return Response({"status": 200, "responseText": "File has been deleted."}, status=status.HTTP_200_OK)
+                elif file.has_perm(request.user.id):
+                    file.deny_access(request.user.id)
+                    return Response({"status": 200, "responseText": "Access to this file has been denied by you."}, status=status.HTTP_200_OK)
+                else:
+                    return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+    
+            except:
+                return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+
+class RenameFileSerializer(serializers.Serializer):
+    file_id = serializers.UUIDField()
+    override = serializers.BooleanField(default=False)
+    new_name = serializers.CharField()
+
+class RenameFolderSerializer(serializers.Serializer):
+    folder_id = serializers.UUIDField()
+    override = serializers.BooleanField(default=False)
+    new_name = serializers.CharField()
+
+class RenameFileAPIView(APIView):
+    serializer_class = RenameFileSerializer
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        serializer = self.serializer_class(request.data)
+        if serializer.is_valid():
+            try:
+                file = File.objects.get(id=request.POST.get('file_id'))
+                new_name = request.POST.get('new_name')
+                if not file.is_editor(request.user.id):
+                    return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+                if not request.POST.get('override'):
+                    file_path = os.path.join(settings.MEDIA_ROOT, file.get_full_path())
+                    new_file_path = os.path.join(os.path.dirname(file_path), new_name)
+                    try:
+                        os.rename(file_path, new_file_path)
+                    except FileExistsError:
+                        return Response({"status": 403, "responseText": "A file with this name exists."}, status=status.HTTP_403_FORBIDDEN)
+                    file.file = new_file_path
+                    file.name = new_name
+                    file.save()
+                else:
+                    file_path = os.path.join(settings.MEDIA_ROOT, file.get_full_path())
+                    new_file_path = os.path.join(os.path.dirname(file_path), new_name)
+                    if os.path.exists(new_file_path):
+                        os.remove(new_file_path)
+                    os.rename(file_path, new_file_path)
+                    file.file = new_file_path
+                    if File.objects.filter(parent=file.parent, name=new_name).exists():
+                        to_be_del = File.objects.get(parent=file.parent, name=new_name)
+                        to_be_del.delete()
+                    file.name = new_name
+                    file.save()
+                return Response({"status": 200, "responseText": "File has been renamed successfully."}, status=status.HTTP_200_OK)
+            except:
+                return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+
+class RenameFolderAPIView(APIView):
+    serializer_class = RenameFolderSerializer
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        serializer = self.serializer_class(request.data)
+        if serializer.is_valid():
+            try:
+                folder = Folder.objects.get(id=request.POST.get('folder_id'))
+                if not folder.is_editor(request.user.id):
+                    return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+                new_name = request.POST.get('new_name')
+                if not request.POST.get('override'):
+                    file_path = os.path.join(settings.MEDIA_ROOT, folder.get_path())
+                folder_path = apply_correct_path(folder.get_path())
+                new_folder_path = os.path.join(os.path.dirname(folder_path), new_name)
+                if os.path.exists(new_folder_path):
+                    shutil.rmtree(new_folder_path)
+                os.rename(folder_path, new_folder_path)
+                if Folder.objects.filter(parent=folder.parent, name=new_name).exists():
+                    to_be_del = Folder.objects.get(parent=folder, name=new_name)
+                    to_be_del.delete()
+                folder.name = new_name
+                folder.save()
+                return Response({"status": 200, "responseText": "Folder renamed successfully."}, status=status.HTTP_200_OK)
+            except:
+                return Response({"status": 404, "responseText": "Folder not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+class CopySharedFileAPIView(APIView):
+    serializer_class = FileBaseSerializer
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        serializer = self.serializer_class(request.data)
+        if serializer.is_valid():
+            try:
+                file = File.objects.get(id=request.POST.get('file_id'))
+                if not file.has_perm(request.user.id):
+                    return Response({"status": 403, "responseText": "Access denied"})
+                File.objects.create(
+                    name=file.name,
+                    owner=request.user,
+                    file=file.file,
+                    parent=None,
+                    size=file.size
+                )
+                return Response({"status": 200, "responseText": "File has been copied to yuor storage."}, status=status.HTTP_200_OK)
+            except:
+                return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+class MoveFileSerializer(serializers.Serializer):
+    file_id = serializers.UUIDField()
+    destination_folder_id = serializers.UUIDField(required=False)
+
+    def validate(self, data):
+        file_id = data.get('file_id')
+        destination_folder_id = data.get('destination_folder_id')
+        
+        # Validate the file exists
+        try:
+            file = File.objects.get(id=file_id)
+            data['file'] = file
+        except File.DoesNotExist:
+            raise serializers.ValidationError("The file does not exist.")
+        
+        # Validate the destination folder (optional if moving to 'home')
+        if destination_folder_id:
+            try:
+                folder = Folder.objects.get(id=destination_folder_id)
+                data['destination'] = folder
+            except Folder.DoesNotExist:
+                raise serializers.ValidationError("The destination folder does not exist.")
+        
+        return data
+
+class MoveFolderSerializer(serializers.Serializer):
+    folder_id = serializers.UUIDField()
+    destination_folder_id = serializers.UUIDField(required=False)
+
+    def validate(self, data):
+        folder_id = data.get('folder_id')
+        destination_folder_id = data.get('destination_folder_id')
+        
+        # Validate the folder exists
+        try:
+            folder = Folder.objects.get(id=folder_id)
+            data['folder'] = folder
+        except Folder.DoesNotExist:
+            raise serializers.ValidationError("The folder does not exist.")
+        
+        # Validate the destination folder (optional if moving to 'home')
+        if destination_folder_id:
+            try:
+                destination = Folder.objects.get(id=destination_folder_id)
+                data['destination'] = destination
+            except Folder.DoesNotExist:
+                raise serializers.ValidationError("The destination folder does not exist.")
+        
+        return data
+
 
 # # Create your views here.
 # def sign_up(request):
