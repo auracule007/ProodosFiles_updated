@@ -30,7 +30,7 @@ def load_key():
     with open('mykey.key', 'r') as keyfile:
         return keyfile.read()
 
-ALLOWED_HOSTS = ['.ngrok-free.app', '127.0.0.1']
+ALLOWED_HOSTS = ['.ngrok-free.app', '127.0.0.1', "https://proodoosfiles.onrender.com"]
 
 APPEND_SLASH = True
 # Application definition
