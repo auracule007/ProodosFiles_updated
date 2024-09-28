@@ -172,6 +172,7 @@ User = get_user_model()
 class ResendSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
+
 class ResendVerificationEmailView(views.APIView):
     serializer_class = ResendSerializer
     permission_classes = [AllowAny]
@@ -211,21 +212,80 @@ class ResendVerificationEmailView(views.APIView):
         current_site = get_current_site(request)
         token = default_token_generator.make_token(user)
         uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
-        print(user.pk, "pk")
-        print(token)
-        print(uidb64)
-        url_tail = str({"token": f"{token}", "u_id": f"{uidb64}"}).encode("ascii")
-        mail_subject = 'Activation link'  
-        message = render_to_string('acc_active_email.html', {  
-            'user': user,  
-            'url': url,  
-            'uid':urlsafe_base64_encode(url_tail),   
+        
+        # Construct the query parameter containing token and uidb64
+        u_info = urlsafe_base64_encode(force_bytes({"token": token, "u_id": uidb64}))
+
+        # Build the complete URL with the u_info parameter appended as a query parameter
+        verification_url = f"{url}?u_info={u_info}"
+        
+        mail_subject = 'Activation link'
+        message = render_to_string('acc_active_email.html', {
+            'user': user,
+            'url': verification_url,  # Use the newly constructed URL
         })
         to_email = user.email
-        print(to_email)
         plain_message = strip_tags(message)
         send_mail(mail_subject, plain_message, "verify@codedextersacademy.com", [to_email], html_message=message)
-        print("sent")
+
+        print(f"Verification email sent to: {to_email}")
+        print(f"Verification URL: {verification_url}")
+
+
+# class ResendVerificationEmailView(views.APIView):
+#     serializer_class = ResendSerializer
+#     permission_classes = [AllowAny]
+#     parser_classes = [JSONParser]
+
+#     @extend_schema(
+#         description="Resends a verification email if former link has expired",
+#         summary="",
+#         responses={
+#             200: OpenApiExample(
+#                 "Success",
+#                 value={
+#                     "responseText": "Email sent if user exists"
+#                 }
+#             )
+#         }
+#     )
+#     def post(self, request):
+#         email = request.data.get('email')
+        
+#         try:
+#             # Get the user by email
+#             user = CustomUser.objects.get(email=email)
+            
+#             # Ensure the user is not already active
+#             if user.is_active:
+#                 return Response({'responseText': 'This account is already verified.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+#             # Resend the verification email
+#             RegisterSerializer().send_verification(request, user, request.data.get('url'))
+#             return Response({'responseText': 'Email sent if it exists on our server.'}, status=status.HTTP_200_OK)
+        
+#         except CustomUser.DoesNotExist:
+#             return Response({'responseText': 'Email sent if it exists on our server.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+#     def send_verification(self, request, user, url):
+#         current_site = get_current_site(request)
+#         token = default_token_generator.make_token(user)
+#         uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+#         print(user.pk, "pk")
+#         print(token)
+#         print(uidb64)
+#         url_tail = str({"token": f"{token}", "u_id": f"{uidb64}"}).encode("ascii")
+#         mail_subject = 'Activation link'  
+#         message = render_to_string('acc_active_email.html', {  
+#             'user': user,  
+#             'url': url,  
+#             'uid':urlsafe_base64_encode(url_tail),   
+#         })
+#         to_email = user.email
+#         print(to_email)
+#         plain_message = strip_tags(message)
+#         send_mail(mail_subject, plain_message, "verify@codedextersacademy.com", [to_email], html_message=message)
+#         print("sent")
 
 
 class VerifyEmailSerializer(serializers.Serializer):
