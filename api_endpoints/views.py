@@ -437,6 +437,7 @@ class FileUploadSerializer(serializers.Serializer):
     description="Upload multiple files to a folder"
 )
 class FileUploadView(APIView):
+    serializer_class = FileUploadSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
 
@@ -691,6 +692,7 @@ class PasswordResetSerializer(serializers.Serializer):
     description=""
 )
 class PasswordResetAPIView(APIView):
+    serializer_class = PasswordResetSerializer
     permission_classes = [AllowAny]
     parser_classes = [JSONParser]
 
@@ -898,9 +900,11 @@ class FolderViewAPIView(APIView):
             folder.access_count += 1
             folder.save()
 
+        if not folder.has_perm(request.user.id):
+            return Response({"status": 403, "responseText": "Access denied"})
             # Serialize the folder, its subfolders, and files
-            serializer = FolderSerializer(folder)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        serializer = FolderSerializer(folder)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response({"responseText": "You do not have permission to view this folder."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1052,6 +1056,7 @@ class StarFolderSerializer(serializers.Serializer):
 class StarFolderAPIView(APIView):
     serializer_class = StarFolderSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         folder_id = request.data.get('folder_id')  # Use request.data for JSON requests
@@ -1060,8 +1065,7 @@ class StarFolderAPIView(APIView):
 
             # Check if the user is the folder owner or has access
             if request.user != folder.owner:
-                if not (folder.access_list.contains(request.user) or folder.access_everyone or 
-                        SharedFolder.objects.filter(folder=folder, user=request.user).exists()):
+                if not (folder.has_perm(request.user.id)):
                     return Response({"status": 403, "responseText": "You do not have access to this item"}, status=403)
             
             # If user is the owner
@@ -1116,6 +1120,7 @@ class BinFolderSerializer(serializers.Serializer):
 class BinFolderAPIView(APIView):
     serializer_class = BinFolderSerializer
     parser_classes = [JSONParser]  # To parse incoming JSON data
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         folder_id = request.data.get('folder_id')  # Use request.data for JSON body
@@ -1184,6 +1189,7 @@ class BinFolderAPIView(APIView):
 
 class DeletePermAPIView(APIView):
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         folder_id = request.data.get('folder_id')  # Corrected to use request.data for JSON payloads
@@ -1231,6 +1237,7 @@ class DeletePermAPIView(APIView):
 class CopySharedFolderAPIView(APIView):
     serializer_class = StarFolderSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         folder_id = request.POST.get('folder_id')
@@ -1268,6 +1275,7 @@ class CopySharedFolderAPIView(APIView):
                         parent=parent_folder,
                         owner=request.user
                     )
+
 
                 # Create file entries in the database
                 for file_name in files:
@@ -1410,53 +1418,78 @@ def generate_signed_url(file, user, expiry_seconds=300):
 
 class ShareFileAPIView(APIView):
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        folder_id = request.GET.get('folder_id')
+        folder_instance = get_object_or_404(Folder, id=folder_id)
+
+        # Check permissions for viewing the shared users
+        if folder_instance.is_editor(request.user.id):
+            shared_list = SharedFolder.objects.filter(shared_by=request.user, folder=folder_instance)
+            shared_with_everyone = folder_instance.access_everyone
+
+            return Response({
+                'folder_name': folder_instance.name,
+                'shared_list': [
+                    {
+                        'user': shared.user.username,
+                        'role': shared.get_role_display(),
+                    } for shared in shared_list
+                ],
+                'shared_with_everyone': shared_with_everyone,
+            }, status=status.HTTP_200_OK)
+
+        return Response({'status': 403, 'responseText': 'You do not have permission to view shared users'}, status=status.HTTP_403_FORBIDDEN)
 
     def post(self, request):
         folder_id = request.POST.get('folder_id')
         try:
             file_instance = File.objects.get(id=folder_id)
             if request.method == 'POST':
-                usernames = request.POST.get('usernames', '')
-                role = request.POST.get('userRole', '1')
-                share_with_everyone = request.POST.get('everyone', False)
-                friend_to_share = request.POST.getlist('friends')
-            
-                usernames = [username.strip() for username in usernames.split(',') if username.strip() and CustomUser.objects.filter(username=username.strip()).exists()]
-            
-                for friend in friend_to_share:
-                    try:
-                        usernames.append(CustomUser.objects.get(id=friend).username)
-                    except:
-                        pass
-                # print(usernames)
+                if file_instance.has_perm(request.user.id):
+                    usernames = request.POST.get('usernames', '')
+                    role = request.POST.get('userRole', '1')
+                    share_with_everyone = request.POST.get('everyone', False)
+                    friend_to_share = request.POST.getlist('friends')
+                
+                    usernames = [username.strip() for username in usernames.split(',') if username.strip() and CustomUser.objects.filter(username=username.strip()).exists()]
+                
+                    for friend in friend_to_share:
+                        try:
+                            usernames.append(CustomUser.objects.get(id=friend).username)
+                        except:
+                            pass
+                    # print(usernames)
 
-                messages = []
-                if not share_with_everyone:
-                    for username in usernames:
-                        user = CustomUser.objects.filter(username=username).first()
-                        print(file_instance)
-                        file_instance.access_list.add(user)
-                        print(file_instance.access_list.all())
+                    messages = []
+                    if not share_with_everyone:
+                        for username in usernames:
+                            user = CustomUser.objects.filter(username=username).first()
+                            print(file_instance)
+                            file_instance.access_list.add(user)
+                            print(file_instance.access_list.all())
+                            file_instance.save()
+                            if user and user != request.user:
+                                try:
+                                    SharedFile.objects.update_or_create(
+                                        user=user,
+                                        file=file_instance,
+                                        shared_by=request.user,
+                                        role=role
+                                    )
+                                except:
+                                    pass
+                                messages.append(f'{file_instance.name} shared with {user.username}')
+                            else:
+                                messages.append(f'Failed to share with {username} (invalid username or sharing with yourself).')
+                    else:
+                        file_instance.access_everyone = True
                         file_instance.save()
-                        if user and user != request.user:
-                            try:
-                                SharedFile.objects.update_or_create(
-                                    user=user,
-                                    file=file_instance,
-                                    shared_by=request.user,
-                                    role=role
-                                )
-                            except:
-                                pass
-                            messages.append(f'{file_instance.name} shared with {user.username}')
-                        else:
-                            messages.append(f'Failed to share with {username} (invalid username or sharing with yourself).')
-                else:
-                    file_instance.access_everyone = True
-                    file_instance.save()
-                    messages.append(f'{file_instance.name} shared with everyone')
+                        messages.append(f'{file_instance.name} shared with everyone')
 
-            return JsonResponse({'status': 'success', 'messages': "File shared with selected users."})
+                return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'status': 200, 'responseText': "File shared with selected users."})
         except:
             return Response({"status": 404, "responseText": "This file was not found."})
 
@@ -1466,6 +1499,7 @@ class FileBaseSerializer(serializers.Serializer):
 class StarFileAPIView(APIView):
     serializer_class = FileBaseSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         file_id = request.POST.get('file_id')
@@ -1498,6 +1532,7 @@ class FileBaseSerializer(serializers.Serializer):
 class StarFileAPIView(APIView):
     serializer_class = FileBaseSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         file_id = request.POST.get('file_id')
@@ -1536,6 +1571,7 @@ def get_file_or_404(model, item_id):
 class BinFileAPIView(APIView):
     serializer_class = FileBaseSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         file_id = request.POST.get('file_id')
@@ -1563,12 +1599,13 @@ class BinFileAPIView(APIView):
             except:
                 return Response({"status": 404, "responseText": "This file was not found."}, status=status.HTTP_404_NOT_FOUND)
 
-class FolderBaseSerializer(APIView):
+class FolderBaseSerializer(serializers.Serializer):
     folder_id = serializers.UUIDField()
 
 class UnzipFileAPIView(APIView):
     serializer_class = FileBaseSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = self.serializer_class(request.data)
@@ -1663,6 +1700,7 @@ def create_zip_file(folder, save_path):
 class ZipFolderAPIView(APIView):
     serializer_class = FolderBaseSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = self.serializer_class(request.data)
@@ -1688,6 +1726,7 @@ class ZipFolderAPIView(APIView):
 class DeletePermFileAPIView(APIView):
     serializer_class  = FileBaseSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = self.serializer_class(request.data)
@@ -1719,6 +1758,7 @@ class RenameFolderSerializer(serializers.Serializer):
 class RenameFileAPIView(APIView):
     serializer_class = RenameFileSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = self.serializer_class(request.data)
@@ -1757,7 +1797,7 @@ class RenameFileAPIView(APIView):
 class RenameFolderAPIView(APIView):
     serializer_class = RenameFolderSerializer
     parser_classes = [JSONParser]
-
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         serializer = self.serializer_class(request.data)
         if serializer.is_valid():
@@ -1786,6 +1826,7 @@ class RenameFolderAPIView(APIView):
 class CopySharedFileAPIView(APIView):
     serializer_class = FileBaseSerializer
     parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = self.serializer_class(request.data)
@@ -1857,7 +1898,8 @@ class MoveFolderSerializer(serializers.Serializer):
         return data
 
 class MoveFolderAPIView(APIView):
-
+    serializer_class = MoveFolderSerializer
+    permission_classes = [IsAuthenticated]
     @swagger_auto_schema(
         operation_description="Move a folder to a different folder or home directory.",
         request_body=MoveFolderSerializer,
@@ -1902,6 +1944,8 @@ class MoveFolderAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class MoveFileAPIView(APIView):
+    serializer_class = MoveFileSerializer
+    permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_description="Move a file to a different folder or home directory.",
@@ -1947,7 +1991,194 @@ class MoveFileAPIView(APIView):
             return Response({"status": "Success", "message": "File moved successfully."}, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ChangeRoleSerializer(serializers.Serializer):
+    sharing_id = serializers.UUIDField()
+    new_role = serializers.IntegerField()
+    item_type = serializers.IntegerField()
+
+    def validate(self, data):
+        data['item_type'] = self.item_type
+        if self.item_type == 0:
+            try:
+                file_shar = SharedFile.objects.get(id=self.sharing_id)
+                data['sharing'] = file_shar
+            except:
+                raise serializers.ValidationError("Sharing id not valid or incorrect item type")
+        elif self.item_type == 1:
+            try:
+                folder_shar = SharedFolder.objects.get(id=self.sharing_id)
+                data['sharing'] = folder_shar
+            except:
+                raise serializers.ValidationError("Sharing id not valid or incorrect item type")
+        else:
+            raise serializers.ValidationError("Invalid item type. Enter a correct type.")
+        return data
+    
+class ChangeRoleAPIView(serializers.Serializer):
+    serializer_class = ChangeRoleSerializer
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = self.serializer_class(request.data)
+        if serializer.is_valid():
+            if serializer.validated_data['item_type'] == 1:
+                sharedfolder = SharedFolder.objects.get(id=self.sharing_id, shared_by=request.user)
+                sharedfolder.role = request.POST.get('new_role', sharedfolder.role)
+                sharedfolder.save()
+            else:
+                sharedfile = SharedFile.objects.get(id=self.sharing_id, shared_by=request.user)
+                sharedfile.role = self.new_role or sharedfile.role
+                sharedfile.save()
+            return Response({"status": 200, "responseText": "User role changed successfully."})
+        return Response({"status": 403, "responseText": "Invalid data"}, status=status.HTTP_403_FORBIDDEN)
+
+class RemoveRoleSerializer(serializers.Serializer):
+    sharing_id = serializers.UUIDField()
+    item_type = serializers.IntegerField()
+
+    def validate(self, data):
+        if self.item_type == 0:
+            try:
+                sharedfile = SharedFile.objects.get(id=data['sharing_id'])
+                data['sharing'] = sharedfile
+            except:
+                raise serializers.ValidationError("Invalid sharing id")
+        elif self.item_type == 1:
+            try:
+                sharedfolder = SharedFolder.objects.get(id=data['sharing_id'])
+                data['sharing'] = sharedfolder
+            except:
+                raise serializers.ValidationError("Invalid sharing id")
+        else:
+            raise serializers.ValidationError("Invalid item type.")
+        
+class RemoveRoleAPIView(APIView):
+    serializer_class = RemoveRoleSerializer
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = self.serializer_class(request.data)
+        if serializer.is_valid():
+            sharing = serializer.validated_data['sharing']
+            if serializer.validated_data['item_type'] == 0:
+                if sharing.file.access_list.contains(request.user):
+                    sharing.file.access_list.remove(request.user)
+                    sharing.file.save()
+            else:
+                if sharing.folder.access_list.contains(request.user):
+                    sharing.folder.access_list.remove(request.user)
+                    sharing.folder.save() 
+            sharing.delete()
+            return Response({"status": 200, "responseText": "Role removed successfully"}, status=status.HTTP_200_OK)
+
+        return Response({"status": 403, "responseText": "invalid item type or sharing id."}, status=status.HTTP_403_FORBIDDEN)
+
+class SuggestedFilesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        recent_folders = Folder.objects.filter(owner=request.user).order_by('-id')[:4]
+        frequent_folders = Folder.objects.filter(owner=request.user).order_by('-access_count')[:4]
+        shared_folders = Folder.objects.filter(access_list=request.user)[:4]
+
+        # Fetch suggested files
+        recent_files = File.objects.filter(owner=request.user).order_by('-last_accessed')[:4]
+        frequent_files = File.objects.filter(owner=request.user).order_by('-access_count')[:4]
+        shared_files = File.objects.filter(access_list=request.user)[:4]
+
+        temp_suggested_folders = [
+            {'folders': recent_folders, 'reason': 'Recently Accessed'},
+            {'folders': frequent_folders, 'reason': 'Frequently Accessed'},
+            {'folders': shared_folders, 'reason': 'Shared with You'},
+        ]
+
+        suggested_folders = [
+            {'folders': [], 'reason': 'Recently Accessed'},
+            {'folders': [], 'reason': 'Frequently Accessed'},
+            {'folders': [], 'reason': 'Shared with You'},
+        ]
+
+        seen_folder_ids = set()
+    
+        for i in range(0, 3):
+            for folder in temp_suggested_folders[i]['folders']:
+                if folder.id not in seen_folder_ids:
+                    suggested_folders[i]['folders'].append(folder)
+                    seen_folder_ids.add(folder.id)
+
+
+
+        temp_suggested_files = [
+            {'files': recent_files, 'reason': 'Recently Accessed'},
+            {'files': frequent_files, 'reason': 'Frequently Accessed'},
+            {'files': shared_files, 'reason': 'Shared with You'},
+        ]
+
+        suggested_files = [
+            {'files': [], 'reason': 'Recently Accessed'},
+            {'files': [], 'reason': 'Frequently Accessed'},
+            {'files': [], 'reason': 'Shared with You'},
+        ]
+
+        seen_file_ids = set()
+        
+        for i in range(0, 3):
+            for file in temp_suggested_files[i]['files']:
+                if file.id not in seen_file_ids:
+                    suggested_files[i]['files'].append(file)
+                    seen_file_ids.add(file.id)
+
+class GetStarredFilesAPIView(APIView):
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from itertools import chain
+        from operator import attrgetter
+        folders = Folder.objects.filter(owner=request.user, starred=True)
+        my_starred_folders = request.user.starred_folders.all()
+        files = File.objects.filter(owner=request.user, starred=True)
+        my_starred_files = request.user.starred_files.all()
+
+        folders = sorted(chain(folders, my_starred_folders), key=lambda instance: instance.created_at)
+        files = sorted(chain(files, my_starred_files), key=lambda instance: instance.upload_date)
+
+        for file in range(0, len(files)):
+            if files[file].has_perm(request.user.id):
+                pass
+            else:
+                request.user.starred_files.remove(files[file])
+                request.user.save()
+                del files[file]
+
+        for folder in range(0, len(folders)):
+            if folders[folder].has_perm(request.user.id):
+                pass
+            else:
+                request.user.starred_folders.remove(folders[folder])
+                request.user.save()
+                del folders[folder]
+
+class SharedFilesAPIView(APIView):
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        shared_folders = SharedFolder.objects.filter(user=request.user, visible=True)
+        shared_files = SharedFile.objects.filter(user=request.user, visible=True)
+
+        # Separate files and folders
+        shared_files = [item.file for item in shared_files if item.file is not None]
+        shared_folders = [item.folder for item in shared_folders if item.folder is not None]
+        return Response({'files': shared_files, 'folders': shared_folders}, status=status.HTTP_200_OK)
+
+
 # # Create your views here.
+
+
 # def sign_up(request):
 #     if request.method == 'POST':
 #         form = RegistrationForm(request.POST)

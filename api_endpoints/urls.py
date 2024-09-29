@@ -15,6 +15,8 @@ urlpatterns = [
     path("rest-pswd/", views.PasswordResetAPIView.as_view(), name="reset_paswrd"),
     path("forgot-pass/", views.PasswordResetRequestAPIView.as_view(), name="forgot_passw"),
 
+    path("shared-f/", views.SharedFilesAPIView.as_view(), name="shared_files_api"),
+
     path("create-f/", views.FolderCreateAPIView.as_view(), name="create_fo"),
     path('get-folders/', views.UserFoldersAPIView.as_view(), name='user-folders'), #added
     path('user-files/', views.UserFilesAPIView.as_view(), name='user-files'), #added
@@ -24,6 +26,10 @@ urlpatterns = [
     path('fi/rename/', views.RenameFileAPIView.as_view(), name="rename_file_api"),
     path('fi/copy/', views.CopySharedFileAPIView.as_view(), name='copy_shared_file_api'),
     path("fi/move/", views.MoveFileAPIView.as_view(), name="move_file_api"),
+
+    path("change-role", views.ChangeRoleAPIView.as_view(), name="change_role_api"),
+    path("suggested/", views.SuggestedFilesAPIView.as_view(), name="suggested_file_api"),
+    path("starred-f/", views.GetStarredFilesAPIView.as_view(), name="starred_files_api"),
 
     path("fo/sharing/", views.ShareFolderAPIView.as_view(), name="fold_shar"),
     path("fo/star/", views.StarFolderAPIView.as_view(), name="star_folder_api"),
