@@ -11,7 +11,7 @@ urlpatterns = [
     # path('delete-file/<uuid:file_id>/', views.delete_permanently, name="delete_file"),
     # path('unzip/<uuid:file_id>/', views.unzip, name='unzip_file'),
     # path('send-zip/<uuid:folder_id>/', views.zip_folder, name='zip_folder'),
-    path('copy-shared-file/<uuid:file_id>/', views.copy_shared_file, name='copy_shared_file'),
+    # path('copy-shared-file/<uuid:file_id>/', views.copy_shared_file, name='copy_shared_file'),
     # path('changeRole/', views.change_role, name="change_role"),
-    path('removeAcces/', views.remove_access, name="remove_access"),
+    # path('removeAcces/', views.remove_access, name="remove_access"),
 ]

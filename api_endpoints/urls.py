@@ -31,6 +31,8 @@ urlpatterns = [
     path("suggested/", views.SuggestedFilesAPIView.as_view(), name="suggested_file_api"),
     path("starred-f/", views.GetStarredFilesAPIView.as_view(), name="starred_files_api"),
 
+    path("binned-f/", views.BinnedFilesAPIView.as_view(), name="binned_files_api"),
+    
     path("fo/sharing/", views.ShareFolderAPIView.as_view(), name="fold_shar"),
     path("fo/star/", views.StarFolderAPIView.as_view(), name="star_folder_api"),
     path("fo/bin/", views.BinFolderAPIView.as_view(), name="bin_fo_api"),
