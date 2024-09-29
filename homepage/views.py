@@ -144,32 +144,32 @@ from folder_management.models import Folder, SharedFolder
 
 #     return render(request, 'view_shared_items.html', context)
 
-@login_required
-def binned_view(request):
-    binned_files = File.objects.binned_items().filter(owner=request.user)
-    binned_folders = Folder.objects.binned_items().filter(owner=request.user)
+# @login_required
+# def binned_view(request):
+#     binned_files = File.objects.binned_items().filter(owner=request.user)
+#     binned_folders = Folder.objects.binned_items().filter(owner=request.user)
 
-    now = timezone.now()
-    cutoff_date = now - timezone.timedelta(days=30)
+#     now = timezone.now()
+#     cutoff_date = now - timezone.timedelta(days=30)
 
-    files_to_delete = binned_files.filter(binned__lte=cutoff_date)
-    folders_to_delete = binned_folders.filter(binned__lte=cutoff_date)   
+#     files_to_delete = binned_files.filter(binned__lte=cutoff_date)
+#     folders_to_delete = binned_folders.filter(binned__lte=cutoff_date)   
 
-    for file in files_to_delete:
-        if os.path.exists(file.get_full_path()):
-            os.remove(file.get_full_path())
-        file.delete()
+#     for file in files_to_delete:
+#         if os.path.exists(file.get_full_path()):
+#             os.remove(file.get_full_path())
+#         file.delete()
 
-    for folder in folders_to_delete:
-        if os.path.exists(folder.get_path()):
-            os.remove(folder.get_path())
-        folder.delete()
+#     for folder in folders_to_delete:
+#         if os.path.exists(folder.get_path()):
+#             os.remove(folder.get_path())
+#         folder.delete()
             
-    context = {
-        'binned_files': binned_files,
-        'binned_folders': binned_folders
-    }
-    return render(request, 'bin_view.html', context)
+#     context = {
+#         'binned_files': binned_files,
+#         'binned_folders': binned_folders
+#     }
+#     return render(request, 'bin_view.html', context)
 
 @login_required
 def go_back(request):

@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 import os
 import re
@@ -2174,6 +2174,30 @@ class SharedFilesAPIView(APIView):
         shared_files = [item.file for item in shared_files if item.file is not None]
         shared_folders = [item.folder for item in shared_folders if item.folder is not None]
         return Response({'files': shared_files, 'folders': shared_folders}, status=status.HTTP_200_OK)
+
+class BinnedFilesAPIView(APIView):
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        binned_files = File.objects.binned_items().filter(owner=request.user)
+        binned_folders = Folder.objects.binned_items().filter(owner=request.user)
+        from django.utils import timezone
+        now = timezone.now()
+        cutoff_date = now - timezone.timedelta(days=30)
+
+        files_to_delete = binned_files.filter(binned__lte=cutoff_date)
+        folders_to_delete = binned_folders.filter(binned__lte=cutoff_date)   
+
+        for file in files_to_delete:
+            if os.path.exists(file.get_full_path()):
+                os.remove(file.get_full_path())
+            file.delete()
+
+        for folder in folders_to_delete:
+            if os.path.exists(folder.get_path()):
+                os.remove(folder.get_path())
+            folder.delete()
 
 
 # # Create your views here.
