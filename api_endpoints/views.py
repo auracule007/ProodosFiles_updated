@@ -670,7 +670,11 @@ class FolderCreateAPIView(APIView):
                 
                 SharedFolder.objects.get_or_create(user=parent_folder.owner, folder=new_folder, shared_by=request.user, role=3)
 
-            return Response({"responseText": "Folder has been created successfully."}, status=status.HTTP_201_CREATED)
+            return Response({
+                "responseText": "Folder has been created successfully.",
+                "folder_id": new_folder.id,
+                "parent_folder_id": parent_folder.id if parent_folder else None  # Include parent folder id if it exists
+            }, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -908,7 +912,8 @@ class FolderViewAPIView(APIView):
         serializer = FolderSerializer(folder)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-# Recursive function to share subfolders and files
+        return Response({"responseText": "You do not have permission to view this folder."}, status=status.HTTP_403_FORBIDDEN)
+
 def share_item_recursive(item, users, user):
     # If the item is a folder, share all subfolders and files
     if isinstance(item, Folder):
@@ -1049,9 +1054,9 @@ class ShareFolderAPIView(APIView):
             share_with_everyone = request.data.get('everyone', False)
             friend_to_share = request.data.get('friends', [])
             role = request.data.get('userRole', 1)  # Default role is Viewer (1)
-
             # Parse the usernames and friends list
             usernames = [username.strip() for username in usernames.split(',') if username.strip()]
+
             for friend in friend_to_share:
                 try:
                     usernames.append(CustomUser.objects.get(username=friend).username)
@@ -1065,7 +1070,6 @@ class ShareFolderAPIView(APIView):
                     messages.append("This folder has been removed from everyone's view")
                 folder_instance.access_everyone = False
                 folder_instance.save()
-
                 # Share with specific users
                 for username in usernames:
                     user = CustomUser.objects.filter(username=username).first()
