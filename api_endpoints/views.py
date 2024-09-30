@@ -816,26 +816,29 @@ class FileDownloadSerializer(serializers.Serializer):
 #         return HttpResponseForbidden("You do not have permission to access this file.")
     
 @api_view(['GET'])
-def download_file(request):
-    file_id = request.GET.get('file_id')
-    if not file_id:
-        return Response({"status": 403, "responseText": "File id is required"})
-    file = get_object_or_404(File, id=file_id)
-    if request.user.is_authenticated:
-        # Get the file object
+class DownloadFile(APIView):
+    permission_classes = [IsAuthenticated]
 
-        # Check if the user has permission to access the file
-        if not file.has_perm(request.user.id):
-            return HttpResponseForbidden("You do not have permission to access this file.")
-        
-        
-        url = generate_download_signed_url(file, request.user)
-        return redirect(to=url)
-    else:
-        if file.access_everyone:
+    def get(self, request):
+        file_id = request.GET.get('file_id')
+        if not file_id:
+            return Response({"status": 403, "responseText": "File id is required"})
+        file = get_object_or_404(File, id=file_id)
+        if request.user.is_authenticated:
+            # Get the file object
+
+            # Check if the user has permission to access the file
+            if not file.has_perm(request.user.id):
+                return HttpResponseForbidden("You do not have permission to access this file.")
+            
+            
             url = generate_download_signed_url(file, request.user)
             return redirect(to=url)
-        return HttpResponseForbidden("You do not have permission to access this file.")
+        else:
+            if file.access_everyone:
+                url = generate_download_signed_url(file, request.user)
+                return redirect(to=url)
+            return HttpResponseForbidden("You do not have permission to access this file.")
 
 class FileSerializer(serializers.ModelSerializer):
     class Meta:
