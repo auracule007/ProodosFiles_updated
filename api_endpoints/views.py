@@ -815,8 +815,8 @@ class FileDownloadSerializer(serializers.Serializer):
 #         # If the user isn't allowed access and the file isn't public
 #         return HttpResponseForbidden("You do not have permission to access this file.")
     
-@api_view(['GET'])
-class DownloadFile(APIView):
+# @api_view(['GET'])
+class DownloadFileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):

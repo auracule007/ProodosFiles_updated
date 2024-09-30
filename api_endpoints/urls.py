@@ -7,7 +7,7 @@ urlpatterns = [
     path('login/', views.LoginView.as_view(), name='login'),
 
     path('upload_file/', views.FileUploadView.as_view(), name='api_upload_file'),
-    path('download_file/', views.DownloadFile.as_view(), name="download_f_api"),
+    path('download_file/', views.DownloadFileView.as_view(), name="download_f_api"),
     # path('download_file/', views.download_file, name="download_f_api"),
     path('download-signed/<str:signed_value>/', views.download_signed_file, name='serve_download_file'),
     path('share-file/', views.ShareFileAPIView.as_view(), name="share_file_api"),
