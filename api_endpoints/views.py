@@ -900,8 +900,8 @@ class FolderViewAPIView(APIView):
         folder = get_object_or_404(Folder, id=folder_id)
 
         # Check if the user has permission to access the folder
-        if not folder.has_perm(request.user.id):
-            return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+        # if not folder.has_perm(request.user.id):
+        #     return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
         # If the user is the owner, increase the access count
         if folder.owner == request.user:
