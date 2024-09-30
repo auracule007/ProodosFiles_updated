@@ -386,8 +386,8 @@ class LoginView(APIView):
         print(eval(str(request.data)))
         if serializer.is_valid():
             user = serializer.validated_data
-            if Token.objects.filter(user=user).exists():
-                Token.objects.get(user=user).delete()
+            # if Token.objects.filter(user=user).exists():
+            #     Token.objects.get(user=user).delete()
             token, created = Token.objects.get_or_create(user=user)
             response = {'token': token.key, 'username': user.username, 'full_name': user.full_name, "email": user.email}
             print(response)
@@ -594,56 +594,11 @@ class FolderCreateSerializer(serializers.Serializer):
 
 
     
-class FolderCreateAPIView(APIView):
-    serializer_class = FolderCreateSerializer
-    permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser]
-
-    def post(self, request):
-        serializer = FolderCreateSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            folder_name = serializer.validated_data['folder_name']
-            parent_folder_id = serializer.validated_data.get('parent_folder_id', None)
-
-            # Create root folder or subfolder
-            parent_folder = None
-            if parent_folder_id:
-                parent_folder = get_object_or_404(Folder, id=parent_folder_id)
-                if not parent_folder.is_editor(request.user.id):
-                    return Response({"responseText": "You do not have permission to create subfolders here."}, status=status.HTTP_403_FORBIDDEN)
-
-            new_folder = Folder.objects.create(name=folder_name, parent=parent_folder, owner=request.user)
-
-            # Handle shared folder logic for subfolder inheritance
-            if parent_folder and parent_folder.owner != request.user:
-                for sharing in SharedFolder.objects.filter(shared_by=request.user, folder=parent_folder):
-                    SharedFolder.objects.get_or_create(user=sharing.user, shared_by=request.user, folder=new_folder, role=sharing.role)
-
-                SharedFolder.objects.get_or_create(user=parent_folder.owner, folder=new_folder, shared_by=request.user, role=3)
-
-            return Response({
-                "responseText": "Folder has been created successfully.",
-                "folder_id": new_folder.id,
-                "parent_folder_id": parent_folder.id if parent_folder else None,
-                "folder_name": new_folder.name  # Include parent folder id if it exists
-            }, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-
-
-
 # class FolderCreateAPIView(APIView):
 #     serializer_class = FolderCreateSerializer
 #     permission_classes = [IsAuthenticated]
 #     parser_classes = [JSONParser]
 
-#     @extend_schema(
-#         request=FolderCreateSerializer,
-#         description="API for creating folder. Folder id will be required if folder is not created in root directory. Authentication required."
-#     )
 #     def post(self, request):
 #         serializer = FolderCreateSerializer(data=request.data)
         
@@ -651,32 +606,77 @@ class FolderCreateAPIView(APIView):
 #             folder_name = serializer.validated_data['folder_name']
 #             parent_folder_id = serializer.validated_data.get('parent_folder_id', None)
 
-#             # Get the parent folder if provided
+#             # Create root folder or subfolder
+#             parent_folder = None
 #             if parent_folder_id:
 #                 parent_folder = get_object_or_404(Folder, id=parent_folder_id)
-                
-#                 # Check if user has permission to add subfolder in the parent folder
 #                 if not parent_folder.is_editor(request.user.id):
-#                     if parent_folder.has_perm(request.user.id):
-#                         return Response({"responseText": "You do not have permission to create subfolders here."}, status=status.HTTP_403_FORBIDDEN)
-#                     return Response({"responseText": "Parent folder not found."}, status=status.HTTP_404_NOT_FOUND)
-#             else:
-#                 parent_folder = None  # No parent folder, it's a root-level folder
-            
-#             # Create the new folder
+#                     return Response({"responseText": "You do not have permission to create subfolders here."}, status=status.HTTP_403_FORBIDDEN)
+
 #             new_folder = Folder.objects.create(name=folder_name, parent=parent_folder, owner=request.user)
 
-#             # Handle shared folder logic (just like your initial code)
+#             # Handle shared folder logic for subfolder inheritance
 #             if parent_folder and parent_folder.owner != request.user:
-#                 if SharedFolder.objects.filter(shared_by=request.user, folder=parent_folder).exists():
-#                     for sharing in SharedFolder.objects.filter(shared_by=request.user, folder=parent_folder):
-#                         SharedFolder.objects.get_or_create(user=sharing.user, shared_by=request.user, folder=new_folder, role=sharing.role)
-                
+#                 for sharing in SharedFolder.objects.filter(shared_by=request.user, folder=parent_folder):
+#                     SharedFolder.objects.get_or_create(user=sharing.user, shared_by=request.user, folder=new_folder, role=sharing.role)
+
 #                 SharedFolder.objects.get_or_create(user=parent_folder.owner, folder=new_folder, shared_by=request.user, role=3)
 
-#             return Response({"responseText": "Folder has been created successfully."}, status=status.HTTP_201_CREATED)
+#             return Response({
+#                 "responseText": "Folder has been created successfully.",
+#                 "folder_id": new_folder.id,
+#                 "parent_folder_id": parent_folder.id if parent_folder else None  # Include parent folder id if it exists
+#             }, status=status.HTTP_201_CREATED)
 
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FolderCreateAPIView(APIView):
+    serializer_class = FolderCreateSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    @extend_schema(
+        request=FolderCreateSerializer,
+        description="API for creating folder. Folder id will be required if folder is not created in root directory. Authentication required."
+    )
+    def post(self, request):
+        serializer = FolderCreateSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            folder_name = serializer.validated_data['folder_name']
+            parent_folder_id = serializer.validated_data.get('parent_folder_id', None)
+
+            # Get the parent folder if provided
+            if parent_folder_id:
+                parent_folder = get_object_or_404(Folder, id=parent_folder_id)
+                
+                # Check if user has permission to add subfolder in the parent folder
+                if not parent_folder.is_editor(request.user.id):
+                    if parent_folder.has_perm(request.user.id):
+                        return Response({"responseText": "You do not have permission to create subfolders here."}, status=status.HTTP_403_FORBIDDEN)
+                    return Response({"responseText": "Parent folder not found."}, status=status.HTTP_404_NOT_FOUND)
+            else:
+                parent_folder = None  # No parent folder, it's a root-level folder
+            
+            # Create the new folder
+            new_folder = Folder.objects.create(name=folder_name, parent=parent_folder, owner=request.user)
+
+            # Handle shared folder logic (just like your initial code)
+            if parent_folder and parent_folder.owner != request.user:
+                if SharedFolder.objects.filter(shared_by=request.user, folder=parent_folder).exists():
+                    for sharing in SharedFolder.objects.filter(shared_by=request.user, folder=parent_folder):
+                        SharedFolder.objects.get_or_create(user=sharing.user, shared_by=request.user, folder=new_folder, role=sharing.role)
+                
+                SharedFolder.objects.get_or_create(user=parent_folder.owner, folder=new_folder, shared_by=request.user, role=3)
+
+            return Response({
+                "responseText": "Folder has been created successfully.",
+                "folder_id": new_folder.id,
+                "parent_folder_id": parent_folder.id if parent_folder else None  # Include parent folder id if it exists
+            }, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PasswordResetSerializer(serializers.Serializer):
     password1 = serializers.CharField(write_only=True, min_length=8, required=True)
@@ -887,30 +887,35 @@ class FolderViewSerializer(serializers.Serializer):
 @extend_schema(
     request=FolderViewSerializer
 )
+
 class FolderViewAPIView(APIView):
     serializer_class = FolderViewSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
 
     def get(self, request):
+        # Validate folder_id in request query params
         folder_id = request.GET.get('folder_id')
+        if not folder_id:
+            return Response({"status": 400, "responseText": "folder_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Fetch the folder based on the provided folder_id
         folder = get_object_or_404(Folder, id=folder_id)
 
         # Check if the user has permission to access the folder
-        # if folder.has_perm(request.user.id):
-            
-            # Increase access count if the folder owner is the current user
+        if not folder.has_perm(request.user.id):
+            return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        # If the user is the owner, increase the access count
         if folder.owner == request.user:
             folder.access_count += 1
             folder.save()
 
-        if not folder.has_perm(request.user.id):
-            return Response({"status": 403, "responseText": "Access denied"})
-            # Serialize the folder, its subfolders, and files
+        # Serialize the folder along with its subfolders and files
         serializer = FolderSerializer(folder)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-        # return Response({"responseText": "You do not have permission to view this folder."}, status=status.HTTP_403_FORBIDDEN)
+        return Response({"responseText": "You do not have permission to view this folder."}, status=status.HTTP_403_FORBIDDEN)
 
 def share_item_recursive(item, users, user):
     # If the item is a folder, share all subfolders and files
@@ -919,23 +924,72 @@ def share_item_recursive(item, users, user):
             subfolder.access_list.add(users)
             try:
                 SharedFolder.objects.create(
-                        user=user,
-                        folder=item,
-                        shared_by=request.user
-                    )
-            except:
-                pass
+                    user=user,
+                    folder=item,
+                    shared_by=user
+                )
+            except Exception as e:
+                print(f"Error sharing subfolder: {e}")
             share_item_recursive(subfolder, users, user)  # Recursively share subfolders
         for file in item.subfiles.all():
             try:
                 SharedFile.objects.create(
-                        user=user,
-                        folder=item,
-                        shared_by=user
-                    )
-            except:
-                pass
+                    user=user,
+                    folder=item,
+                    shared_by=user
+                )
+            except Exception as e:
+                print(f"Error sharing file: {e}")
             file.access_list.add(users)
+
+
+# class FolderViewAPIView(APIView):
+#     serializer_class = FolderViewSerializer
+#     permission_classes = [IsAuthenticated]
+#     parser_classes = [JSONParser]
+
+#     def get(self, request):
+#         folder_id = request.GET.get('folder_id')
+#         folder = get_object_or_404(Folder, id=folder_id)
+
+#         # Check if the user has permission to access the folder
+#         # if folder.has_perm(request.user.id):
+            
+#             # Increase access count if the folder owner is the current user
+#         if folder.owner == request.user:
+#             folder.access_count += 1
+#             folder.save()
+
+#         if not folder.has_perm(request.user.id):
+#             return Response({"status": 403, "responseText": "Access denied"})
+#             # Serialize the folder, its subfolders, and files
+#         serializer = FolderSerializer(folder)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+# def share_item_recursive(item, users, user):
+#     # If the item is a folder, share all subfolders and files
+#     if isinstance(item, Folder):
+#         for subfolder in item.subfolders.all():
+#             subfolder.access_list.add(users)
+#             try:
+#                 SharedFolder.objects.create(
+#                         user=user,
+#                         folder=item,
+#                         shared_by=request.user
+#                     )
+#             except:
+#                 pass
+#             share_item_recursive(subfolder, users, user)  # Recursively share subfolders
+#         for file in item.subfiles.all():
+#             try:
+#                 SharedFile.objects.create(
+#                         user=user,
+#                         folder=item,
+#                         shared_by=user
+#                     )
+#             except:
+#                 pass
+#             file.access_list.add(users)
 
 # Add all folders for a user endpoint
 # class FolderSerializer(serializers.ModelSerializer):
@@ -945,6 +999,29 @@ def share_item_recursive(item, users, user):
 
 
 class UserFoldersAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # Get root-level folders owned by the user (where parent is None)
+        user_owned_folders = Folder.objects.filter(owner=user, parent=None)
+
+        # Get root-level folders shared with the user (where parent is None)
+        shared_folders = Folder.objects.filter(
+            id__in=SharedFolder.objects.filter(user=user).values_list('folder_id', flat=True),
+            parent=None  # Ensure these are also root-level folders
+        )
+
+        # Combine both sets of root-level folders
+        user_folders = user_owned_folders | shared_folders
+
+        # Serialize folder data
+        serializer = FolderSerializer(user_folders, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class AllFoldersAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):

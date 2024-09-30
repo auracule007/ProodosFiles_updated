@@ -19,6 +19,7 @@ urlpatterns = [
 
     path("create-f/", views.FolderCreateAPIView.as_view(), name="create_fo"),
     path('get-folders/', views.UserFoldersAPIView.as_view(), name='user-folders'), #added
+    path('all-folders/', views.AllFoldersAPIView.as_view(), name='all-folders'), #added
     path('user-files/', views.UserFilesAPIView.as_view(), name='user-files'), #added
     path("view_fo/", views.FolderViewAPIView.as_view(), name="view_fo"),
 
@@ -27,7 +28,7 @@ urlpatterns = [
     path('fi/copy/', views.CopySharedFileAPIView.as_view(), name='copy_shared_file_api'),
     path("fi/move/", views.MoveFileAPIView.as_view(), name="move_file_api"),
 
-    path("change-role", views.ChangeRoleAPIView.as_view(), name="change_role_api"),
+    # path("change-role", views.ChangeRoleAPIView.as_view(), name="change_role_api"),
     path("suggested/", views.SuggestedFilesAPIView.as_view(), name="suggested_file_api"),
     path("starred-f/", views.GetStarredFilesAPIView.as_view(), name="starred_files_api"),
 
