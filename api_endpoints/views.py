@@ -1813,19 +1813,26 @@ class ZipFolderAPIView(APIView):
                 # Handling folder name (ensure no None)
                 folder_name = folder.name if folder.name else 'folder'
                 zip_file_name = f"{folder_name}.zip"
+                print(f"Folder name is: {folder_name}")  # Log the folder name
                 
                 # Create and save the zip file in Django's storage
                 zip_file = ContentFile(in_memory_zip.read())
 
                 # Ensure folder.parent is not None, or handle it properly
-                new_file = File.objects.create(
-                    name=zip_file_name,
-                    file=default_storage.save(zip_file_name, zip_file),
-                    owner=request.user,
-                    parent=folder.parent if folder.parent else None  # Handle None parent folders
-                )
+                file=default_storage.save(zip_file_name, zip_file),
+                # new_file = File.objects.create(
+                #     name=zip_file_name,
+                #     owner=request.user,
+                #     # parent=null  # Handle None parent folders
+                #    parent=  folder_id if folder.parent else str(None)  # Handle None parent folders
+                # )
+                # parent_folder = folder_id
+                # # parent_folder = folder.parent if folder.parent else None
+                # print(f"Parent folder is: {parent_folder}")  # Log the parent folder
 
-                return Response({"status": 200, "responseText": "Folder zipped successfully", "file_id": new_file.id}, status=status.HTTP_200_OK)
+                
+
+                return Response({"status": 200, "responseText": "Folder zipped successfully", "file_id": file}, status=status.HTTP_200_OK)
 
             except Folder.DoesNotExist:
                 return Response({"status": 404, "responseText": "Folder not found"}, status=status.HTTP_404_NOT_FOUND)
