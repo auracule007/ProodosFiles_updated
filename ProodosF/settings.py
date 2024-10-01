@@ -138,11 +138,21 @@ SPECTACULAR_SETTINGS = {
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
+
+
+# Replace the DATABASES section of your settings.py with this
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+  'default': {
+    'ENGINE': 'django.db.backends.postgresql',
+    'NAME': 'proodosf',
+    'USER': 'proodosf_owner',
+    'PASSWORD': '9XDTRVWuAs1K',
+    'HOST': 'ep-odd-sky-a26cv3fy.eu-central-1.aws.neon.tech',
+    'PORT': 5432,
+    'OPTIONS': {
+      'sslmode': 'require',
+    },
+  }
 }
 
 AUTHENTICATION_BACKENDS = [
