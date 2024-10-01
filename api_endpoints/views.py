@@ -23,6 +23,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.core.validators import RegexValidator
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.backends import ModelBackend
+from django.contrib.auth import login
 from cryptography.fernet import Fernet
 
 from django.core.files.storage import default_storage
@@ -815,8 +816,8 @@ class FileDownloadSerializer(serializers.Serializer):
 #         # If the user isn't allowed access and the file isn't public
 #         return HttpResponseForbidden("You do not have permission to access this file.")
     
-# @api_view(['GET'])
-class DownloadFileView(APIView):
+@api_view(['GET'])
+class DownloadFile(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -903,8 +904,8 @@ class FolderViewAPIView(APIView):
         folder = get_object_or_404(Folder, id=folder_id)
 
         # Check if the user has permission to access the folder
-        # if not folder.has_perm(request.user.id):
-        #     return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+        if not folder.has_perm(request.user.id):
+            return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
         # If the user is the owner, increase the access count
         if folder.owner == request.user:
