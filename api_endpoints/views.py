@@ -816,7 +816,7 @@ class FileDownloadSerializer(serializers.Serializer):
 #         # If the user isn't allowed access and the file isn't public
 #         return HttpResponseForbidden("You do not have permission to access this file.")
     
-
+@api_view(['GET'])
 class DownloadFile(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -904,7 +904,6 @@ class FolderViewAPIView(APIView):
         folder = get_object_or_404(Folder, id=folder_id)
 
         # Check if the user has permission to access the folder
-        
         if not folder.has_perm(request.user.id):
             return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1876,34 +1875,77 @@ class RenameFileAPIView(APIView):
             except:
                 return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
 
+
 class RenameFolderAPIView(APIView):
     serializer_class = RenameFolderSerializer
     parser_classes = [JSONParser]
     permission_classes = [IsAuthenticated]
+
     def post(self, request):
-        serializer = self.serializer_class(request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             try:
-                folder = Folder.objects.get(id=request.POST.get('folder_id'))
+                folder = Folder.objects.get(id=request.data.get('folder_id'))
+                
+                # Check permissions
                 if not folder.is_editor(request.user.id):
                     return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-                new_name = request.POST.get('new_name')
-                if not request.POST.get('override'):
-                    file_path = os.path.join(settings.MEDIA_ROOT, folder.get_path())
+                
+                new_name = request.data.get('new_name')
                 folder_path = apply_correct_path(folder.get_path())
                 new_folder_path = os.path.join(os.path.dirname(folder_path), new_name)
-                if os.path.exists(new_folder_path):
+                
+                # Check if new folder path exists and delete if override is True
+                if os.path.exists(new_folder_path) and request.data.get('override'):
                     shutil.rmtree(new_folder_path)
+                
+                # Rename the folder
                 os.rename(folder_path, new_folder_path)
+                
+                # Check for name conflict in the database
                 if Folder.objects.filter(parent=folder.parent, name=new_name).exists():
-                    to_be_del = Folder.objects.get(parent=folder, name=new_name)
+                    to_be_del = Folder.objects.get(parent=folder.parent, name=new_name)
                     to_be_del.delete()
+                
+                # Save new folder name
                 folder.name = new_name
                 folder.save()
+
                 return Response({"status": 200, "responseText": "Folder renamed successfully."}, status=status.HTTP_200_OK)
-            except:
+            
+            except Folder.DoesNotExist:
                 return Response({"status": 404, "responseText": "Folder not found."}, status=status.HTTP_404_NOT_FOUND)
-        return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+        return Response({"status": 400, "responseText": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+
+# class RenameFolderAPIView(APIView):
+#     serializer_class = RenameFolderSerializer
+#     parser_classes = [JSONParser]
+#     permission_classes = [IsAuthenticated]
+#     def post(self, request):
+#         serializer = self.serializer_class(request.data)
+#         if serializer.is_valid():
+#             try:
+#                 folder = Folder.objects.get(id=request.POST.get('folder_id'))
+#                 if not folder.is_editor(request.user.id):
+#                     return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+#                 new_name = request.POST.get('new_name')
+#                 if not request.POST.get('override'):
+#                     file_path = os.path.join(settings.MEDIA_ROOT, folder.get_path())
+#                 folder_path = apply_correct_path(folder.get_path())
+#                 new_folder_path = os.path.join(os.path.dirname(folder_path), new_name)
+#                 if os.path.exists(new_folder_path):
+#                     shutil.rmtree(new_folder_path)
+#                 os.rename(folder_path, new_folder_path)
+#                 if Folder.objects.filter(parent=folder.parent, name=new_name).exists():
+#                     to_be_del = Folder.objects.get(parent=folder, name=new_name)
+#                     to_be_del.delete()
+#                 folder.name = new_name
+#                 folder.save()
+#                 return Response({"status": 200, "responseText": "Folder renamed successfully."}, status=status.HTTP_200_OK)
+#             except:
+#                 return Response({"status": 404, "responseText": "Folder not found."}, status=status.HTTP_404_NOT_FOUND)
+#         return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
     
 class CopySharedFileAPIView(APIView):
     serializer_class = FileBaseSerializer
@@ -2257,29 +2299,82 @@ class SharedFilesAPIView(APIView):
         shared_folders = [item.folder for item in shared_folders if item.folder is not None]
         return Response({'files': shared_files, 'folders': shared_folders}, status=status.HTTP_200_OK)
 
+from django.utils import timezone
 class BinnedFilesAPIView(APIView):
-    parser_classes = [JSONParser]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        binned_files = File.objects.binned_items().filter(owner=request.user)
-        binned_folders = Folder.objects.binned_items().filter(owner=request.user)
-        from django.utils import timezone
+        # Get the current user
+        user = request.user
+
+        # Get binned files and folders belonging to the current user
+        binned_files = File.objects.binned_items().filter(owner=user)
+        binned_folders = Folder.objects.binned_items().filter(owner=user)
+
+        print("Binned files:", binned_files)
+        print("Binned folders:", binned_folders)
+
+        # Set the cutoff date for 30 days
         now = timezone.now()
         cutoff_date = now - timezone.timedelta(days=30)
 
+        # Filter out items that should be deleted (older than 30 days)
         files_to_delete = binned_files.filter(binned__lte=cutoff_date)
-        folders_to_delete = binned_folders.filter(binned__lte=cutoff_date)   
+        folders_to_delete = binned_folders.filter(binned__lte=cutoff_date)
 
+        # Delete files and folders older than 30 days
         for file in files_to_delete:
             if os.path.exists(file.get_full_path()):
                 os.remove(file.get_full_path())
             file.delete()
 
         for folder in folders_to_delete:
-            if os.path.exists(folder.get_path()):
-                os.remove(folder.get_path())
+            folder_path = os.path.join(settings.MEDIA_ROOT, folder.get_path())
+            if os.path.exists(folder_path):
+                shutil.rmtree(folder_path)
             folder.delete()
+
+        # Return the remaining binned items (not deleted)
+        remaining_binned_files = binned_files.filter(binned__gt=cutoff_date)
+        remaining_binned_folders = binned_folders.filter(binned__gt=cutoff_date)
+
+        serialized_files = FileSerializer(remaining_binned_files, many=True)
+        serialized_folders = FolderSerializer(remaining_binned_folders, many=True)
+
+        # Return the full object data
+        return Response({
+            'binned_files': serialized_files.data,
+            'binned_folders': serialized_folders.data,
+        }, status=200)
+        
+# class BinnedFilesAPIView(APIView):
+#     parser_classes = [JSONParser]
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         binned_files = File.objects.binned_items().filter(owner=request.user)
+#         binned_folders = Folder.objects.binned_items().filter(owner=request.user)
+#         from django.utils import timezone
+#         now = timezone.now()
+#         cutoff_date = now - timezone.timedelta(days=30)
+
+#         files_to_delete = binned_files.filter(binned__lte=cutoff_date)
+#         folders_to_delete = binned_folders.filter(binned__lte=cutoff_date)   
+
+#         for file in files_to_delete:
+#             if os.path.exists(file.get_full_path()):
+#                 os.remove(file.get_full_path())
+#             file.delete()
+
+#         for folder in folders_to_delete:
+#             if os.path.exists(folder.get_path()):
+#                 os.remove(folder.get_path())
+#             folder.delete()
+
+#         return Response({
+#             'binned_files': files_to_delete,
+#             'binned_folders': folders_to_delete,
+#         }, status=200)
 
 
 # # Create your views here.
