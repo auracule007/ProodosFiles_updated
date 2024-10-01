@@ -41,7 +41,7 @@ urlpatterns = [
     path("fo/del/", views.DeletePermAPIView.as_view(), name="delete_perm_api"),
 
     path("fo/zip/", views.ZipFolderAPIView.as_view(), name="zip_folder_api"),  #undone
-    path("fo/rename/", views.RenameFolderAPIView.as_view(), name="remove_folder_api"), #undone
+    path("fo/rename/", views.RenameFolderAPIView.as_view(), name="remove_folder_api"), #done
     path("fo/move/", views.MoveFolderAPIView.as_view(), name="move_folder_api"), #undone
 
     path('serve-dc-img/<uuid:file_id>/<str:image_name>/', views.serve_secure_doc_image, name='serve_img'),
