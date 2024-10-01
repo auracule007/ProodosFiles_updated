@@ -50,20 +50,20 @@ class Folder(models.Model):
         return os.path.join(str(self.owner.id), str(self.id))
 
     def save(self, *args, **kwargs):
-        # try:
-        #     if not Folder.objects.get(owner=self.owner, name=self.name, parent=self.parent).id == self.id:
-        #         counter = 1
-        #         unique_name = self.name
-        #         directory = self.parent.get_path() if self.parent else os.path.join(settings.MEDIA_ROOT, self.owner.username)
+        try:
+            if not Folder.objects.get(owner=self.owner, name=self.name, parent=self.parent).id == self.id:
+                counter = 1
+                unique_name = self.name
+                directory = self.parent.get_path() if self.parent else os.path.join(settings.MEDIA_ROOT, self.owner.username)
                 
-        #         while os.path.exists(os.path.join(directory, unique_name)):
-        #             base = self.name
-        #             unique_name = f"{base} ({counter})"
-        #             counter += 1
+                while os.path.exists(os.path.join(directory, unique_name)):
+                    base = self.name
+                    unique_name = f"{base} ({counter})"
+                    counter += 1
 
-        #         self.name = unique_name
-        # except:
-        #     pass
+                self.name = unique_name
+        except:
+            pass
         if self.parent:
             self.access_everyone = self.parent.access_everyone
             if self.parent.binned:
