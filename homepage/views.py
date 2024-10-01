@@ -7,6 +7,9 @@ from django.utils import timezone
 from file_management.models import File, SharedFile
 from folder_management.models import Folder, SharedFolder
 
+
+def homepage(request):
+    return 
 # @login_required
 # def home(request):
 #     # Fetch suggested folders

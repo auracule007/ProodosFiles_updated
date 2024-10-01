@@ -3,6 +3,7 @@ from django.views.generic.base import RedirectView
 from . import views
 
 urlpatterns = [
+    path('', views.homepage, name='homepage'),
     # path('home/', views.home, name="homepage"),
     # path('all/', views.all_files, name='my_files'),
     # path("", RedirectView.as_view(url="/home/"), name="redirected_homepage"),

@@ -1,5 +1,9 @@
 import base64
 from datetime import datetime, timedelta, timezone
+import io
+import zipfile
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 import hashlib
 import os
 import re
@@ -904,8 +908,8 @@ class FolderViewAPIView(APIView):
         folder = get_object_or_404(Folder, id=folder_id)
 
         # Check if the user has permission to access the folder
-        if not folder.has_perm(request.user.id):
-            return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+        # if not folder.has_perm(request.user.id):
+        #     return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
         # If the user is the owner, increase the access count
         if folder.owner == request.user:
@@ -1778,31 +1782,120 @@ def create_zip_file(folder, save_path):
     
     return zip_filename
 
+
 class ZipFolderAPIView(APIView):
     serializer_class = FolderBaseSerializer
     parser_classes = [JSONParser]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = self.serializer_class(request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             try:
-                folder = Folder.objects.get(id=request.POST.get('folder_id'))
+                folder_id = request.data.get('folder_id')
+                if not folder_id:
+                    return Response({"status": 400, "responseText": "Folder ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                folder = Folder.objects.get(id=folder_id)
+                
+                # Check if user has permission to zip the folder
                 if not folder.is_editor(request.user.id):
                     return Response({"status": 403, "responseText": "Action denied"}, status=status.HTTP_403_FORBIDDEN)
-                save_path = folder.parent.get_path() if folder.parent else os.path.join(settings.MEDIA_ROOT, request.user.username)
 
-                zip_file = create_zip_file(folder, save_path)
+                # Create a zip file in memory
+                in_memory_zip = io.BytesIO()
+                with zipfile.ZipFile(in_memory_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    # Add all files in the folder to the zip
+                    self.add_folder_to_zip(zipf, folder)
 
-                File.objects.create(
-                    name=f"{folder.name}.zip",
-                    file=zip_file,
+                in_memory_zip.seek(0)  # Reset file pointer to the start
+
+                # Handling folder name (ensure no None)
+                folder_name = folder.name if folder.name else 'folder'
+                zip_file_name = f"{folder_name}.zip"
+                
+                # Create and save the zip file in Django's storage
+                zip_file = ContentFile(in_memory_zip.read())
+
+                # Ensure folder.parent is not None, or handle it properly
+                new_file = File.objects.create(
+                    name=zip_file_name,
+                    file=default_storage.save(zip_file_name, zip_file),
                     owner=request.user,
-                    size=os.path.getsize(zip_file),
-                    parent=folder.parent
+                    parent=folder.parent if folder.parent else None  # Handle None parent folders
                 )
-            except:
-                return Response({"status": 404, "responseText": "This folder was not found"}, status=status.HTTP_404_NOT_FOUND)
+
+                return Response({"status": 200, "responseText": "Folder zipped successfully", "file_id": new_file.id}, status=status.HTTP_200_OK)
+
+            except Folder.DoesNotExist:
+                return Response({"status": 404, "responseText": "Folder not found"}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                # Log the exact error for debugging
+                print(f"Error during zipping: {e}")  # Debugging
+                return Response({"status": 500, "responseText": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def add_folder_to_zip(self, zipf, folder):
+        """
+        Recursively add all files in the folder and its subfolders to the zip.
+        """
+        try:
+            # Add files in the current folder to the zip
+            for file_obj in folder.subfiles.all():
+                # Ensure file_obj.name and file_obj.file.name are valid
+                file_name = file_obj.name if file_obj.name else 'unnamed_file'
+                file_path = file_obj.file.name
+
+                if not file_path:
+                    print(f"Skipping file with no path: {file_name}")  # Debugging
+                    continue  # Skip if the file path is None
+
+                # Read the file from Django's storage system
+                with default_storage.open(file_path, 'rb') as file_content:
+                    # Add file to zip with its name relative to the folder
+                    zipf.writestr(file_name, file_content.read())
+
+            # Recursively add subfolders
+            for subfolder in folder.subfolders.all():
+                subfolder_name = subfolder.name if subfolder.name else 'unnamed_folder'
+
+                # Add subfolder structure to zip (even if empty)
+                zipf.writestr(f"{subfolder_name}/", '')
+
+                # Recursively add files from subfolder
+                self.add_folder_to_zip(zipf, subfolder)
+
+        except Exception as e:
+            print(f"Error while adding folder to zip: {folder.name}, error: {e}")  # Debugging
+            raise e
+
+
+# class ZipFolderAPIView(APIView):
+#     serializer_class = FolderBaseSerializer
+#     parser_classes = [JSONParser]
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         serializer = self.serializer_class(request.data)
+#         if serializer.is_valid():
+#             try:
+#                 folder = Folder.objects.get(id=request.POST.get('folder_id'))
+#                 if not folder.is_editor(request.user.id):
+#                     return Response({"status": 403, "responseText": "Action denied"}, status=status.HTTP_403_FORBIDDEN)
+#                 save_path = folder.parent.get_path() if folder.parent else os.path.join(settings.MEDIA_ROOT, request.user.username)
+
+#                 zip_file = create_zip_file(folder, save_path)
+
+#                 File.objects.create(
+#                     name=f"{folder.name}.zip",
+#                     file=zip_file,
+#                     owner=request.user,
+#                     size=os.path.getsize(zip_file),
+#                     parent=folder.parent
+#                 )
+#             except:
+#                 return Response({"status": 404, "responseText": "This folder was not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class DeletePermFileAPIView(APIView):
     serializer_class  = FileBaseSerializer
@@ -2074,50 +2167,116 @@ class MoveFolderSerializer(serializers.Serializer):
 class MoveFolderAPIView(APIView):
     serializer_class = MoveFolderSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser]  # Ensure the view can handle JSON requests
-    
-    @swagger_auto_schema(
-        operation_description="Move a folder to a different folder or home directory.",
-        request_body=MoveFolderSerializer,
-        responses={
-            200: openapi.Response("Folder moved successfully."),
-            400: openapi.Response("Bad request, folder or destination not found."),
-            403: openapi.Response("Permission denied."),
-        }
-    )
+    parser_classes = [JSONParser]
+
     def post(self, request):
         serializer = MoveFolderSerializer(data=request.data)
         if serializer.is_valid():
             folder = serializer.validated_data['folder']
-            destination = serializer.validated_data.get('destination')  # Optional destination
+            destination = serializer.validated_data.get('destination')  # Optional destination folder
+
+            # Ensure the user has permission to move the folder
+            if not folder.is_editor(request.user.id):
+                return Response({"status": "Error", "message": "You do not have permission to move this folder."}, status=status.HTTP_403_FORBIDDEN)
 
             if destination:
-                if not (destination.owner == request.user or destination.is_shared_with(request.user, role=3)):
+                if not destination.is_editor(request.user.id):
                     return Response({"status": "Error", "message": "You do not have permission to move to this destination."}, status=status.HTTP_403_FORBIDDEN)
-            else:
-                destination = None
+
+            # Prevent moving the folder into itself or any of its subfolders
+            if self.is_descendant(folder, destination):
+                return Response({"status": "Error", "message": "Cannot move a folder into itself or one of its subfolders."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Generate new folder path
             folder_name = folder.name
-            destination_path = destination.get_path() + f'/{folder_name}' if destination else request.user.username + f'/{folder_name}'
-            
+            destination_path = os.path.join(destination.get_path() if destination else os.path.join(settings.MEDIA_ROOT, str(request.user.id)), folder_name)
+
+            # Normalize paths for compatibility
+            destination_path = os.path.normpath(destination_path)
+            source_path = os.path.normpath(folder.get_path())
+
+            # Check if the source folder path exists
+            if not os.path.exists(source_path):
+                return Response({"status": "Error", "message": f"Source folder path not found: {source_path}"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Ensure the destination directory exists, create if not
+            if not os.path.exists(os.path.dirname(destination_path)):
+                os.makedirs(os.path.dirname(destination_path))
+
+            # Handle duplicate folder names in the destination
             counter = 1
             while os.path.exists(destination_path):
-                destination_path = destination.get_path() + f'/{folder_name} ({counter})' if destination else request.user.username + f'/{folder_name} ({counter})'
+                destination_path = os.path.join(destination.get_path() if destination else os.path.join(settings.MEDIA_ROOT, str(request.user.id)), f'{folder_name} ({counter})')
+                destination_path = os.path.normpath(destination_path)
                 counter += 1
 
-            # Prevent moving folder into itself
-            if folder == destination:
-                return Response({"status": "Error", "message": "Cannot move folder into itself."}, status=status.HTTP_400_BAD_REQUEST)
+            # Move the folder physically in the filesystem
+            try:
+                shutil.move(source_path, destination_path)
+            except Exception as e:
+                return Response({"status": "Error", "message": f"Error moving folder: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Move the folder
-            os.rename(folder.get_path(), destination_path)
+            # Update folder's parent and save the new path in the database
             folder.parent = destination
             folder.save()
 
+            # Recursively update paths of subfolders and files after the move
+            self.update_subfolder_paths(folder, destination_path)
+
             return Response({"status": "Success", "message": "Folder moved successfully."}, status=status.HTTP_200_OK)
-        
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def is_descendant(self, folder, destination):
+        """Check if the destination is a descendant of the folder."""
+        if destination is None:
+            return False
+        current = destination
+        while current:
+            if current == folder:
+                return True
+            current = current.parent
+        return False
+
+    def update_subfolder_paths(self, folder, new_path):
+        """
+        Recursively update the paths of all subfolders and files after the move.
+        This updates the filesystem path and the parent references in the database.
+        """
+        for subfolder in folder.subfolders.all():
+            old_subfolder_path = subfolder.get_path()
+            new_subfolder_path = os.path.join(new_path, subfolder.name)
+
+            # Normalize paths
+            new_subfolder_path = os.path.normpath(new_subfolder_path)
+            old_subfolder_path = os.path.normpath(old_subfolder_path)
+
+            # Move each subfolder physically
+            if os.path.exists(old_subfolder_path):
+                shutil.move(old_subfolder_path, new_subfolder_path)
+
+            # Recursively update the paths of sub-subfolders
+            self.update_subfolder_paths(subfolder, new_subfolder_path)
+
+            # Update the parent in the database and save the new path
+            subfolder.parent = folder
+            subfolder.save()
+
+        # Update the paths of files within this folder
+        for file in folder.subfiles.all():
+            old_file_path = file.get_path()
+            new_file_path = os.path.join(new_path, file.name)
+
+            # Normalize paths
+            old_file_path = os.path.normpath(old_file_path)
+            new_file_path = os.path.normpath(new_file_path)
+
+            # Move each file physically
+            if os.path.exists(old_file_path):
+                shutil.move(old_file_path, new_file_path)
+
+            # Update the path in the database
+            file.save()
 
 
 # class MoveFolderAPIView(APIView):

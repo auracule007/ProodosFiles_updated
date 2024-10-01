@@ -31,7 +31,7 @@ class FileFolderManager(models.Manager):
 
 class Folder(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    owner = models.ForeignKey('user_management.CustomUser', on_delete=models.CASCADE)
+    owner = models.ForeignKey('user_management.CustomUser', on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=1000, blank=True, null=True)
     parent = models.ForeignKey('self', null=True, blank=True, related_name='subfolders', on_delete=models.CASCADE)
@@ -136,9 +136,9 @@ class SharedFolder(models.Model):
         (3, "Editor"),
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey('user_management.CustomUser', on_delete=models.CASCADE)
+    user = models.ForeignKey('user_management.CustomUser', on_delete=models.CASCADE, null=True, blank=True)
     folder = models.ForeignKey(Folder, on_delete=models.CASCADE)
-    shared_by = models.ForeignKey('user_management.CustomUser', related_name='folder_shared_by', on_delete=models.CASCADE)
+    shared_by = models.ForeignKey('user_management.CustomUser', related_name='folder_shared_by', on_delete=models.CASCADE, null=True, blank=True)
     shared_at = models.DateTimeField(auto_now_add=True)
     role = models.CharField(choices=roleChoices, max_length=255, null=False, default=1)
     visible = models.BooleanField(default=True)
