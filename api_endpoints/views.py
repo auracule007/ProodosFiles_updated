@@ -1942,38 +1942,83 @@ class RenameFileAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = self.serializer_class(request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             try:
-                file = File.objects.get(id=request.POST.get('file_id'))
-                new_name = request.POST.get('new_name')
+                # Get the file from the database using file_id
+                file = File.objects.get(id=request.data.get('file_id'))
+                new_name = request.data.get('new_name')
+
+                # Check if the user has permission to edit the file
                 if not file.is_editor(request.user.id):
                     return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-                if not request.POST.get('override'):
-                    file_path = os.path.join(settings.MEDIA_ROOT, file.get_full_path())
-                    new_file_path = os.path.join(os.path.dirname(file_path), new_name)
-                    try:
-                        os.rename(file_path, new_file_path)
-                    except FileExistsError:
-                        return Response({"status": 403, "responseText": "A file with this name exists."}, status=status.HTTP_403_FORBIDDEN)
-                    file.file = new_file_path
-                    file.name = new_name
-                    file.save()
-                else:
-                    file_path = os.path.join(settings.MEDIA_ROOT, file.get_full_path())
-                    new_file_path = os.path.join(os.path.dirname(file_path), new_name)
-                    if os.path.exists(new_file_path):
-                        os.remove(new_file_path)
-                    os.rename(file_path, new_file_path)
-                    file.file = new_file_path
-                    if File.objects.filter(parent=file.parent, name=new_name).exists():
-                        to_be_del = File.objects.get(parent=file.parent, name=new_name)
-                        to_be_del.delete()
-                    file.name = new_name
-                    file.save()
-                return Response({"status": 200, "responseText": "File has been renamed successfully."}, status=status.HTTP_200_OK)
-            except:
+
+                # Get the current file's path and extension
+                old_file_path = file.file.path  # Full path to the file
+                file_extension = os.path.splitext(file.name)[1]  # Keep the current file extension
+                
+                # Build the new file name
+                new_file_name = f"{new_name}{file_extension}"
+                
+                # Create the new full path with the new file name (keeping the same directory)
+                new_file_path = os.path.join(os.path.dirname(old_file_path), new_file_name)
+
+                # Rename the file in the file system
+                os.rename(old_file_path, new_file_path)
+                
+                # Update the file's name and file field in the database
+                file.name = new_file_name  # Update the name in the database
+                file.file.name = os.path.relpath(new_file_path, settings.MEDIA_ROOT)  # Update the file path relative to MEDIA_ROOT
+                file.save()
+
+                return Response({"status": 200, "responseText": "File renamed successfully."}, status=status.HTTP_200_OK)
+
+            except File.DoesNotExist:
                 return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({"status": 500, "responseText": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"status": 400, "responseText": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# class RenameFileAPIView(APIView):
+#     serializer_class = RenameFileSerializer
+#     parser_classes = [JSONParser]
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         serializer = self.serializer_class(request.data)
+#         if serializer.is_valid():
+#             try:
+#                 file = File.objects.get(id=request.POST.get('file_id'))
+#                 new_name = request.POST.get('new_name')
+#                 if not file.is_editor(request.user.id):
+#                     return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+#                 if not request.POST.get('override'):
+#                     file_path = os.path.join(settings.MEDIA_ROOT, file.get_full_path())
+#                     new_file_path = os.path.join(os.path.dirname(file_path), new_name)
+#                     try:
+#                         os.rename(file_path, new_file_path)
+#                     except FileExistsError:
+#                         return Response({"status": 403, "responseText": "A file with this name exists."}, status=status.HTTP_403_FORBIDDEN)
+#                     file.file = new_file_path
+#                     file.name = new_name
+#                     file.save()
+#                 else:
+#                     file_path = os.path.join(settings.MEDIA_ROOT, file.get_full_path())
+#                     new_file_path = os.path.join(os.path.dirname(file_path), new_name)
+#                     if os.path.exists(new_file_path):
+#                         os.remove(new_file_path)
+#                     os.rename(file_path, new_file_path)
+#                     file.file = new_file_path
+#                     if File.objects.filter(parent=file.parent, name=new_name).exists():
+#                         to_be_del = File.objects.get(parent=file.parent, name=new_name)
+#                         to_be_del.delete()
+#                     file.name = new_name
+#                     file.save()
+#                 return Response({"status": 200, "responseText": "File has been renamed successfully."}, status=status.HTTP_200_OK)
+#             except:
+#                 return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
 class RenameFolderAPIView(APIView):
@@ -2145,30 +2190,132 @@ class MoveFileAPIView(APIView):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+# class MoveFolderSerializer(serializers.Serializer):
+#     folder_id = serializers.UUIDField()
+#     destination_folder_id = serializers.UUIDField(required=False)  # Destination is optional
+
+#     # Validate and get the actual folder instances
+#     def validate(self, data):
+#         folder_id = data.get('folder_id')
+#         destination_folder_id = data.get('destination_folder_id', None)
+        
+#         try:
+#             folder = Folder.objects.get(id=folder_id)
+#         except Folder.DoesNotExist:
+#             raise serializers.ValidationError("Folder not found.")
+        
+#         if destination_folder_id:
+#             try:
+#                 destination = Folder.objects.get(id=destination_folder_id)
+#             except Folder.DoesNotExist:
+#                 raise serializers.ValidationError("Destination folder not found.")
+#         else:
+#             destination = None  # No destination means moving to root
+        
+#         data['folder'] = folder
+#         data['destination'] = destination
+#         return data
+
+# class MoveFolderAPIView(APIView):
+#     """
+#     API View to move a folder to a different destination folder.
+#     """
+#     # serializer_class = MoveFolderSerializer
+#     permission_classes = [IsAuthenticated]
+#     parser_classes = [JSONParser]
+
+#     def post(self, request):
+#         serializer = MoveFolderSerializer(data=request.data)
+#         if serializer.is_valid():
+#             folder = serializer.validated_data['folder']
+#             destination = serializer.validated_data.get('destination')  # Optional destination folder
+
+#             # Ensure the user has permission to move the folder
+#             if not folder.is_editor(request.user.id):
+#                 return Response({"status": "Error", "message": "You do not have permission to move this folder."}, status=status.HTTP_403_FORBIDDEN)
+
+#             if destination and not destination.is_editor(request.user.id):
+#                 return Response({"status": "Error", "message": "You do not have permission to move to this destination."}, status=status.HTTP_403_FORBIDDEN)
+
+#             # Prevent moving the folder into itself or its subfolders
+#             if self.is_descendant(folder, destination):
+#                 return Response({"status": "Error", "message": "Cannot move a folder into itself or one of its subfolders."}, status=status.HTTP_400_BAD_REQUEST)
+
+#             # Generate new folder path
+#             folder_name = folder.name
+#             destination_path = os.path.join(destination.get_path() if destination else os.path.join(settings.MEDIA_ROOT, str(request.user.id)), folder_name)
+
+#             # Normalize paths for compatibility
+#             destination_path = os.path.normpath(destination_path)
+#             source_path = os.path.normpath(folder.get_path())
+
+#             # Check if the source folder path exists
+#             # if not os.path.exists(source_path):
+#             #     return Response({"status": "Error", "message": f"Source folder path not found: {source_path}"}, status=status.HTTP_400_BAD_REQUEST)
+
+#             # Handle duplicate folder names in the destination
+#             destination_path = self.handle_duplicate_names(destination, folder_name, destination_path)
+
+#             # Move the folder physically in the filesystem
+#             try:
+#                 shutil.move(source_path, destination_path)
+#             except Exception as e:
+#                 return Response({"status": "Error", "message": f"Error moving folder: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#             # Update folder's parent in the database
+#             folder.parent = destination
+#             folder.save()
+
+#             return Response({"status": "Success", "message": "Folder moved successfully."}, status=status.HTTP_200_OK)
+
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#     def handle_duplicate_names(self, destination, folder_name, destination_path):
+#         """Handle duplicate folder names in the destination by appending a counter."""
+#         counter = 1
+#         while os.path.exists(destination_path):
+#             destination_path = os.path.join(destination.get_path() if destination else os.path.join(settings.MEDIA_ROOT, str(request.user.id)), f'{folder_name} ({counter})')
+#             destination_path = os.path.normpath(destination_path)
+#             counter += 1
+#         return destination_path
+
+#     def is_descendant(self, folder, destination):
+#         """Check if the destination is a descendant of the folder."""
+#         if destination is None:
+#             return False
+#         current = destination
+#         while current:
+#             if current == folder:
+#                 return True
+#             current = current.parent
+#         return False
+
+
+
 class MoveFolderSerializer(serializers.Serializer):
     folder_id = serializers.UUIDField()
-    destination_folder_id = serializers.UUIDField(required=False)  # Destination is optional
+    destination_folder_id = serializers.UUIDField(required=False, allow_null=True)
 
-    # Validate and get the actual folder instances
     def validate(self, data):
         folder_id = data.get('folder_id')
-        destination_folder_id = data.get('destination_folder_id', None)
-        
+        destination_folder_id = data.get('destination_folder_id')
+
+        # Validate that the folder exists
         try:
             folder = Folder.objects.get(id=folder_id)
+            data['folder'] = folder
         except Folder.DoesNotExist:
-            raise serializers.ValidationError("Folder not found.")
-        
+            raise serializers.ValidationError("The folder does not exist.")
+
+        # Validate the destination folder (if provided)
         if destination_folder_id:
             try:
                 destination = Folder.objects.get(id=destination_folder_id)
+                data['destination'] = destination
             except Folder.DoesNotExist:
-                raise serializers.ValidationError("Destination folder not found.")
-        else:
-            destination = None  # No destination means moving to root
-        
-        data['folder'] = folder
-        data['destination'] = destination
+                raise serializers.ValidationError("The destination folder does not exist.")
+
         return data
 
 class MoveFolderAPIView(APIView):
@@ -2176,119 +2323,59 @@ class MoveFolderAPIView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
 
+    @swagger_auto_schema(
+        operation_description="Move a folder to a different folder or home directory.",
+        request_body=MoveFolderSerializer,
+        responses={
+            200: openapi.Response("Folder moved successfully."),
+            400: openapi.Response("Bad request, folder or destination not found."),
+            403: openapi.Response("Permission denied."),
+        }
+    )
     def post(self, request):
         serializer = MoveFolderSerializer(data=request.data)
         if serializer.is_valid():
             folder = serializer.validated_data['folder']
-            destination = serializer.validated_data.get('destination')  # Optional destination folder
+            destination = serializer.validated_data.get('destination', None)  # Optional destination (None means move to root/home)
 
-            # Ensure the user has permission to move the folder
+            # Check if the user has permission to move the folder
             if not folder.is_editor(request.user.id):
                 return Response({"status": "Error", "message": "You do not have permission to move this folder."}, status=status.HTTP_403_FORBIDDEN)
 
             if destination:
-                if not destination.is_editor(request.user.id):
+                # Ensure the user has permission to move the folder to the destination
+                if not (destination.owner == request.user or destination.is_editor(request.user.id)):
                     return Response({"status": "Error", "message": "You do not have permission to move to this destination."}, status=status.HTTP_403_FORBIDDEN)
 
-            # Prevent moving the folder into itself or any of its subfolders
-            if self.is_descendant(folder, destination):
-                return Response({"status": "Error", "message": "Cannot move a folder into itself or one of its subfolders."}, status=status.HTTP_400_BAD_REQUEST)
+                # Prevent moving a folder into itself or its subfolders
+                if folder == destination:
+                    return Response({"status": "Error", "message": "Cannot move folder into itself."}, status=status.HTTP_400_BAD_REQUEST)
+                if folder in destination.subfolders.all():
+                    return Response({"status": "Error", "message": "Cannot move folder into its subfolder."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Generate new folder path
-            folder_name = folder.name
-            destination_path = os.path.join(destination.get_path() if destination else os.path.join(settings.MEDIA_ROOT, str(request.user.id)), folder_name)
+            # If no destination, set the folder as a root-level folder (parent = None)
+            if destination is None:
+                folder.parent = None
+            else:
+                # Move folder under the destination folder as a subfolder
+                folder.parent = destination
 
-            # Normalize paths for compatibility
-            destination_path = os.path.normpath(destination_path)
-            source_path = os.path.normpath(folder.get_path())
-
-            # Check if the source folder path exists
-            if not os.path.exists(source_path):
-                return Response({"status": "Error", "message": f"Source folder path not found: {source_path}"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Ensure the destination directory exists, create if not
-            if not os.path.exists(os.path.dirname(destination_path)):
-                os.makedirs(os.path.dirname(destination_path))
-
-            # Handle duplicate folder names in the destination
-            counter = 1
-            while os.path.exists(destination_path):
-                destination_path = os.path.join(destination.get_path() if destination else os.path.join(settings.MEDIA_ROOT, str(request.user.id)), f'{folder_name} ({counter})')
-                destination_path = os.path.normpath(destination_path)
-                counter += 1
-
-            # Move the folder physically in the filesystem
             try:
-                shutil.move(source_path, destination_path)
+                # Save the changes to the database
+                folder.save()
             except Exception as e:
-                return Response({"status": "Error", "message": f"Error moving folder: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            # Update folder's parent and save the new path in the database
-            folder.parent = destination
-            folder.save()
-
-            # Recursively update paths of subfolders and files after the move
-            self.update_subfolder_paths(folder, destination_path)
+                return Response({"status": "Error", "message": f"Failed to move folder: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             return Response({"status": "Success", "message": "Folder moved successfully."}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def is_descendant(self, folder, destination):
-        """Check if the destination is a descendant of the folder."""
-        if destination is None:
-            return False
-        current = destination
-        while current:
-            if current == folder:
-                return True
-            current = current.parent
-        return False
-
-    def update_subfolder_paths(self, folder, new_path):
-        """
-        Recursively update the paths of all subfolders and files after the move.
-        This updates the filesystem path and the parent references in the database.
-        """
-        for subfolder in folder.subfolders.all():
-            old_subfolder_path = subfolder.get_path()
-            new_subfolder_path = os.path.join(new_path, subfolder.name)
-
-            # Normalize paths
-            new_subfolder_path = os.path.normpath(new_subfolder_path)
-            old_subfolder_path = os.path.normpath(old_subfolder_path)
-
-            # Move each subfolder physically
-            if os.path.exists(old_subfolder_path):
-                shutil.move(old_subfolder_path, new_subfolder_path)
-
-            # Recursively update the paths of sub-subfolders
-            self.update_subfolder_paths(subfolder, new_subfolder_path)
-
-            # Update the parent in the database and save the new path
-            subfolder.parent = folder
-            subfolder.save()
-
-        # Update the paths of files within this folder
-        for file in folder.subfiles.all():
-            old_file_path = file.get_path()
-            new_file_path = os.path.join(new_path, file.name)
-
-            # Normalize paths
-            old_file_path = os.path.normpath(old_file_path)
-            new_file_path = os.path.normpath(new_file_path)
-
-            # Move each file physically
-            if os.path.exists(old_file_path):
-                shutil.move(old_file_path, new_file_path)
-
-            # Update the path in the database
-            file.save()
-
 
 # class MoveFolderAPIView(APIView):
 #     serializer_class = MoveFolderSerializer
 #     permission_classes = [IsAuthenticated]
+#     parser_classes = [JSONParser]
+
 #     @swagger_auto_schema(
 #         operation_description="Move a folder to a different folder or home directory.",
 #         request_body=MoveFolderSerializer,
@@ -2302,7 +2389,138 @@ class MoveFolderAPIView(APIView):
 #         serializer = MoveFolderSerializer(data=request.data)
 #         if serializer.is_valid():
 #             folder = serializer.validated_data['folder']
-#             destination = serializer.validated_data.get('destination')  # Optional destination
+#             destination = serializer.validated_data.get('destination', None)  # Optional destination (None means move to root/home)
+
+#             # Check if the user has permission to move the folder
+#             if not folder.is_editor(request.user.id):
+#                 return Response({"status": "Error", "message": "You do not have permission to move this folder."}, status=status.HTTP_403_FORBIDDEN)
+
+#             if destination:
+#                 # Ensure the user has permission to move the folder to the destination
+#                 if not (destination.owner == request.user or destination.is_editor(request.user.id)):
+#                     return Response({"status": "Error", "message": "You do not have permission to move to this destination."}, status=status.HTTP_403_FORBIDDEN)
+
+#                 # Prevent moving a folder into itself or its subfolders
+#                 if folder == destination:
+#                     return Response({"status": "Error", "message": "Cannot move folder into itself."}, status=status.HTTP_400_BAD_REQUEST)
+#                 if folder in destination.subfolders.all():
+#                     return Response({"status": "Error", "message": "Cannot move folder into its subfolder."}, status=status.HTTP_400_BAD_REQUEST)
+
+#             # If no destination, set the folder as a root-level folder (parent = None)
+#             if destination is None:
+#                 folder.parent = None
+#             else:
+#                 # Move folder under the destination folder as a subfolder
+#                 folder.parent = destination
+
+#             try:
+#                 # Save the changes to the database
+#                 folder.save()
+#             except Exception as e:
+#                 return Response({"status": "Error", "message": f"Failed to move folder: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#             return Response({"status": "Success", "message": "Folder moved successfully."}, status=status.HTTP_200_OK)
+
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# class MoveFolderAPIView(APIView): working for copying and moving
+#     serializer_class = MoveFolderSerializer
+#     permission_classes = [IsAuthenticated]
+#     parser_classes = [JSONParser]
+
+#     @swagger_auto_schema(
+#         operation_description="Move a folder to a different folder or home directory.",
+#         request_body=MoveFolderSerializer,
+#         responses={
+#             200: openapi.Response("Folder moved successfully."),
+#             400: openapi.Response("Bad request, folder or destination not found."),
+#             403: openapi.Response("Permission denied."),
+#         }
+#     )
+#     def post(self, request):
+#         serializer = MoveFolderSerializer(data=request.data)
+#         if serializer.is_valid():
+#             folder = serializer.validated_data['folder']
+#             destination = serializer.validated_data.get('destination', None)  # Optional destination (None means move to root/home)
+
+#             # Check if the user has permission to move the folder
+#             if not folder.is_editor(request.user.id):
+#                 return Response({"status": "Error", "message": "You do not have permission to move this folder."}, status=status.HTTP_403_FORBIDDEN)
+
+#             if destination:
+#                 # Ensure the user has permission to move the folder to the destination
+#                 if not (destination.owner == request.user or destination.is_editor(request.user.id)):
+#                     return Response({"status": "Error", "message": "You do not have permission to move to this destination."}, status=status.HTTP_403_FORBIDDEN)
+
+#                 # Prevent moving a folder into itself or its subfolders
+#                 if folder == destination:
+#                     return Response({"status": "Error", "message": "Cannot move folder into itself."}, status=status.HTTP_400_BAD_REQUEST)
+#                 if folder in destination.subfolders.all():
+#                     return Response({"status": "Error", "message": "Cannot move folder into its subfolder."}, status=status.HTTP_400_BAD_REQUEST)
+
+#             # If no destination, set the folder as a root-level folder (parent = None)
+#             if destination is None:
+#                 folder.parent = None
+#             else:
+#                 # Move folder under the destination folder as a subfolder
+#                 folder.parent = destination
+
+#             try:
+#                 # Save the changes to the database
+#                 folder.save()
+#             except Exception as e:
+#                 return Response({"status": "Error", "message": f"Failed to move folder: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#             return Response({"status": "Success", "message": "Folder moved successfully."}, status=status.HTTP_200_OK)
+
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+ 
+
+# class MoveFolderSerializer(serializers.Serializer):
+#     folder_id = serializers.UUIDField()
+#     destination_folder_id = serializers.UUIDField(required=False)
+
+#     def validate(self, data):
+#         folder_id = data.get('folder_id')
+#         destination_folder_id = data.get('destination_folder_id')
+        
+#         # Validate the folder exists
+#         try:
+#             folder = Folder.objects.get(id=folder_id)
+#             data['folder'] = folder
+#         except Folder.DoesNotExist:
+#             raise serializers.ValidationError("The folder does not exist.")
+        
+#         # Validate the destination folder (optional if moving to 'home')
+#         if destination_folder_id:
+#             try:
+#                 destination = Folder.objects.get(id=destination_folder_id)
+#                 data['destination'] = destination
+#             except Folder.DoesNotExist:
+#                 raise serializers.ValidationError("The destination folder does not exist.")
+        
+#         return data
+    
+# class MoveFolderAPIView(APIView):
+#     serializer_class = MoveFolderSerializer
+#     permission_classes = [IsAuthenticated]
+#     parser_classes = JSONParser
+
+#     @swagger_auto_schema(
+#         operation_description="Move a folder to a different folder or home directory.",
+#         request_body=MoveFolderSerializer,
+#         responses={
+#             200: openapi.Response("Folder moved successfully."),
+#             400: openapi.Response("Bad request, folder or destination not found."),
+#             403: openapi.Response("Permission denied."),
+#         }
+#     )
+#     def post(self, request):
+#         serializer = MoveFolderSerializer(data=request.data)
+#         if serializer.is_valid():
+#             folder = serializer.validated_data['folder']
+#             destination = serializer.validated_data.get('destination', None)  # Optional destination
 
 #             if destination:
 #                 if not (destination.owner == request.user or destination.is_shared_with(request.user, role=3)):
@@ -2333,30 +2551,7 @@ class MoveFolderAPIView(APIView):
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# class MoveFolderSerializer(serializers.Serializer):
-#     folder_id = serializers.UUIDField()
-#     destination_folder_id = serializers.UUIDField(required=False)
 
-#     def validate(self, data):
-#         folder_id = data.get('folder_id')
-#         destination_folder_id = data.get('destination_folder_id')
-        
-#         # Validate the folder exists
-#         try:
-#             folder = Folder.objects.get(id=folder_id)
-#             data['folder'] = folder
-#         except Folder.DoesNotExist:
-#             raise serializers.ValidationError("The folder does not exist.")
-        
-#         # Validate the destination folder (optional if moving to 'home')
-#         if destination_folder_id:
-#             try:
-#                 destination = Folder.objects.get(id=destination_folder_id)
-#                 data['destination'] = destination
-#             except Folder.DoesNotExist:
-#                 raise serializers.ValidationError("The destination folder does not exist.")
-        
-#         return data
 
 class ChangeRoleSerializer(serializers.Serializer):
     sharing_id = serializers.UUIDField()
@@ -2503,32 +2698,71 @@ class GetStarredFilesAPIView(APIView):
 
     def get(self, request):
         from itertools import chain
-        from operator import attrgetter
-        folders = Folder.objects.filter(owner=request.user, starred=True)
-        my_starred_folders = request.user.starred_folders.all()
-        files = File.objects.filter(owner=request.user, starred=True)
-        my_starred_files = request.user.starred_files.all()
 
-        folders = sorted(chain(folders, my_starred_folders), key=lambda instance: instance.created_at)
-        files = sorted(chain(files, my_starred_files), key=lambda instance: instance.upload_date)
+        # Get folders owned by the user that are starred
+        owned_starred_folders = Folder.objects.filter(owner=request.user, starred=True)
 
-        for file in range(0, len(files)):
-            if files[file].has_perm(request.user.id):
-                pass
-            else:
-                request.user.starred_files.remove(files[file])
-                request.user.save()
-                del files[file]
+        # Get shared folders (via access_list) that are starred
+        shared_starred_folders = Folder.objects.filter(access_list=request.user, starred=True)
 
-        for folder in range(0, len(folders)):
-            if folders[folder].has_perm(request.user.id):
-                pass
-            else:
-                request.user.starred_folders.remove(folders[folder])
-                request.user.save()
-                del folders[folder]
+        # Combine owned and shared folders
+        combined_folders = list(chain(owned_starred_folders, shared_starred_folders))
 
-        return Response({ "status": 200, "my_starred_folders": my_starred_folders, "my_starred_files": my_starred_files})
+        # Sort combined folders by created_at
+        combined_folders = sorted(combined_folders, key=lambda f: f.created_at)
+
+        # Get files owned by the user that are starred
+        owned_starred_files = File.objects.filter(owner=request.user, starred=True)
+
+        # Get shared files (via access_list or permission system) that are starred
+        shared_starred_files = File.objects.filter(access_list=request.user, starred=True)
+
+        # Combine owned and shared files
+        combined_files = list(chain(owned_starred_files, shared_starred_files))
+
+        # Sort combined files by upload_date
+        combined_files = sorted(combined_files, key=lambda f: f.upload_date)
+
+        # Return the response with both starred folders and starred files
+        return Response({
+            "status": 200,
+            "my_starred_folders": FolderSerializer(combined_folders, many=True).data,
+            "my_starred_files": FileSerializer(combined_files, many=True).data,
+        })
+
+
+# class GetStarredFilesAPIView(APIView):
+#     parser_classes = [JSONParser]
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         from itertools import chain
+#         from operator import attrgetter
+#         folders = Folder.objects.filter(owner=request.user, starred=True)
+#         my_starred_folders = request.user.starred_folders.all()
+#         files = File.objects.filter(owner=request.user, starred=True)
+#         my_starred_files = request.user.starred_files.all()
+
+#         folders = sorted(chain(folders, my_starred_folders), key=lambda instance: instance.created_at)
+#         files = sorted(chain(files, my_starred_files), key=lambda instance: instance.upload_date)
+
+#         for file in range(0, len(files)):
+#             if files[file].has_perm(request.user.id):
+#                 pass
+#             else:
+#                 request.user.starred_files.remove(files[file])
+#                 request.user.save()
+#                 del files[file]
+
+#         for folder in range(0, len(folders)):
+#             if folders[folder].has_perm(request.user.id):
+#                 pass
+#             else:
+#                 request.user.starred_folders.remove(folders[folder])
+#                 request.user.save()
+#                 del folders[folder]
+
+#         return Response({ "status": 200, "my_starred_folders": my_starred_folders, "my_starred_files": my_starred_files})
 
 class SharedFilesAPIView(APIView):
     parser_classes = [JSONParser]
