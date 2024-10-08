@@ -2020,7 +2020,6 @@ class RenameFileAPIView(APIView):
 #             except:
 #                 return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
 
-
 class RenameFolderAPIView(APIView):
     serializer_class = RenameFolderSerializer
     parser_classes = [JSONParser]
@@ -2037,22 +2036,16 @@ class RenameFolderAPIView(APIView):
                     return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
                 
                 new_name = request.data.get('new_name')
-                folder_path = apply_correct_path(folder.get_path())
-                new_folder_path = os.path.join(os.path.dirname(folder_path), new_name)
                 
-                # Check if new folder path exists and delete if override is True
-                if os.path.exists(new_folder_path) and request.data.get('override'):
-                    shutil.rmtree(new_folder_path)
-                
-                # Rename the folder
-                os.rename(folder_path, new_folder_path)
-                
-                # Check for name conflict in the database
+                # Check for name conflict in the same parent folder
                 if Folder.objects.filter(parent=folder.parent, name=new_name).exists():
-                    to_be_del = Folder.objects.get(parent=folder.parent, name=new_name)
-                    to_be_del.delete()
+                    if request.data.get('override'):
+                        # Delete conflicting folder if override is True
+                        Folder.objects.filter(parent=folder.parent, name=new_name).delete()
+                    else:
+                        return Response({"status": 409, "responseText": "Folder with this name already exists."}, status=status.HTTP_409_CONFLICT)
                 
-                # Save new folder name
+                # Rename the folder in the database
                 folder.name = new_name
                 folder.save()
 
@@ -2061,7 +2054,52 @@ class RenameFolderAPIView(APIView):
             except Folder.DoesNotExist:
                 return Response({"status": 404, "responseText": "Folder not found."}, status=status.HTTP_404_NOT_FOUND)
             
+            except Exception as e:
+                return Response({"status": 500, "responseText": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
         return Response({"status": 400, "responseText": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+    
+# class RenameFolderAPIView(APIView):
+#     serializer_class = RenameFolderSerializer
+#     parser_classes = [JSONParser]
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         serializer = self.serializer_class(data=request.data)
+#         if serializer.is_valid():
+#             try:
+#                 folder = Folder.objects.get(id=request.data.get('folder_id'))
+                
+#                 # Check permissions
+#                 if not folder.is_editor(request.user.id):
+#                     return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+                
+#                 new_name = request.data.get('new_name')
+#                 folder_path = apply_correct_path(folder.get_path())
+#                 new_folder_path = os.path.join(os.path.dirname(folder_path), new_name)
+                
+#                 # Check if new folder path exists and delete if override is True
+#                 if os.path.exists(new_folder_path) and request.data.get('override'):
+#                     shutil.rmtree(new_folder_path)
+                
+#                 # Rename the folder
+#                 os.rename(folder_path, new_folder_path)
+                
+#                 # Check for name conflict in the database
+#                 if Folder.objects.filter(parent=folder.parent, name=new_name).exists():
+#                     to_be_del = Folder.objects.get(parent=folder.parent, name=new_name)
+#                     to_be_del.delete()
+                
+#                 # Save new folder name
+#                 folder.name = new_name
+#                 folder.save()
+
+#                 return Response({"status": 200, "responseText": "Folder renamed successfully."}, status=status.HTTP_200_OK)
+            
+#             except Folder.DoesNotExist:
+#                 return Response({"status": 404, "responseText": "Folder not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+#         return Response({"status": 400, "responseText": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
 
 # class RenameFolderAPIView(APIView):
 #     serializer_class = RenameFolderSerializer
