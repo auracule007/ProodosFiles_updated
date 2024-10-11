@@ -28,7 +28,6 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 
 urlpatterns = [
     path('admin-a/', admin.site.urls),
-    # path("homepage/", include("homepage.urls")),
     path('account/', include('user_management.urls')),
     # path('', include('homepage.urls')),
     path('folder/', include('folder_management.urls')),
@@ -37,6 +36,7 @@ urlpatterns = [
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
     path('swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path("homepage/", include("homepage.urls")),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 

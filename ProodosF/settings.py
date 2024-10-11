@@ -76,6 +76,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost",
     "http://localhost:5173",
     "https://proodo-files-ozie.vercel.app",
+    "https://www.proodosfiles.com",
     "https://prodos-files.vercel.app",  # Add your allowed domain(s) here
     # "https://firm-shew-nationally.ngrok-free.app",
 ]
