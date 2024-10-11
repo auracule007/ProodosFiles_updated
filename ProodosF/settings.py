@@ -24,13 +24,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-!#v=nxvbnakx56tnb3@x)c0qu5!6=7^t=xkbjs=hlayhsfb!28'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 def load_key():
     with open('mykey.key', 'r') as keyfile:
         return keyfile.read()
 
-ALLOWED_HOSTS = ['.ngrok-free.app', '127.0.0.1', "proodoosfiles.onrender.com"]
+ALLOWED_HOSTS = ['127.0.0.1', "proodoosfiles.onrender.com", "api.proodosfiles.com"]
 
 APPEND_SLASH = True
 # Application definition
@@ -131,7 +131,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Your Project API',
     'VERSION': '1.0.0',
-    'DESCRIPTION': 'API for PróodosFiles.',
+    'DESCRIPTION': 'API for Pr贸odosFiles.',
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
@@ -142,18 +142,12 @@ SPECTACULAR_SETTINGS = {
 
 # Replace the DATABASES section of your settings.py with this
 DATABASES = {
-  'default': {
-    'ENGINE': 'django.db.backends.postgresql',
-    'NAME': 'proodosf',
-    'USER': 'proodosf_owner',
-    'PASSWORD': '9XDTRVWuAs1K',
-    'HOST': 'ep-odd-sky-a26cv3fy.eu-central-1.aws.neon.tech',
-    'PORT': 5432,
-    'OPTIONS': {
-      'sslmode': 'require',
-    },
-  }
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
 }
+
 
 AUTHENTICATION_BACKENDS = [
     'user_management.authentication_backends.EmailOrUsernameModelBackend',  # Replace 'your_app' with the name of your app
@@ -213,8 +207,8 @@ EMAIL_USE_TLS = True
 
 PASSWORD_RESET_TIMEOUT = 3600 * 24
 
-LOGIN_URL = '/account/login/'
-LOGIN_REDIRECT_URL = '/home/'
+# LOGIN_URL = '/account/login/'
+# LOGIN_REDIRECT_URL = '/home/'
 
 FILE_ENCRYPTION_KEY = load_key()
 
