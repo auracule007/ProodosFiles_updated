@@ -467,7 +467,7 @@ class FileUploadView(APIView):
 
             for uploaded_file in files:
                 file_instance = File(
-                    name=uploaded_file.name,
+                    name=os.path.basename(uploaded_file.name),
                     owner=request.user,
                     parent=None,
                     file=uploaded_file,
