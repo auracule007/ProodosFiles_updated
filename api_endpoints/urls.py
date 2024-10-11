@@ -30,7 +30,7 @@ urlpatterns = [
     path("fi/move/", views.MoveFileAPIView.as_view(), name="move_file_api"), #undone
     path("fi/bin/", views.BinFileAPIView.as_view(), name="bin_file_api"),
     path("fi/star/", views.StarFileAPIView.as_view(), name="star_file_api"),
-
+    
     # path("change-role", views.ChangeRoleAPIView.as_view(), name="change_role_api"),
     path("suggested/", views.SuggestedFilesAPIView.as_view(), name="suggested_file_api"), #undone
     path("starred-f/", views.GetStarredFilesAPIView.as_view(), name="starred_files_api"), 
