@@ -1587,62 +1587,92 @@ class StarFileAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        file_id = request.POST.get('file_id')
-        serializer = self.serializer_class(file_id)
+        # Use request.data to get file_id (handles both JSON and form data)
+        file_id = request.data.get('file_id')
+
+        # Check if file_id is provided
+        if not file_id:
+            return Response({"status": 400, "responseText": "File ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Pass `file_id` as data to the serializer for validation
+        serializer = self.serializer_class(data={'file_id': file_id})
+
         if serializer.is_valid():
+            # Extract validated file_id
+            file_id = serializer.validated_data['file_id']
             try:
+                # Get the file by ID
                 file = File.objects.get(id=file_id)
+
+                # Check if the user has permission to star/unstar the file
                 if not file.has_perm(request.user.id):
-                    return Response({"status": 403, "responseText": "Action denied"})
+                    return Response({"status": 403, "responseText": "Action denied"}, status=status.HTTP_403_FORBIDDEN)
+
+                # If the request user is the file owner, toggle the file's `starred` field
                 if file.owner == request.user:
-                    if file.starred:
-                        file.starred = False
-                    else:
-                        file.starred = True
+                    file.starred = not file.starred  # Toggle starred status
                 else:
+                    # If the user is not the owner, star/unstar it for the user's starred files
                     user = request.user
                     if user.starred_files.contains(file):
-                        user.starred_files.remove(file)
+                        user.starred_files.remove(file)  # Unstar the file
                     else:
-                        user.starred_files.add(file)
+                        user.starred_files.add(file)  # Star the file
                     user.save()
+
+                # Save the file (needed if owner stars/unstars it)
                 file.save()
-                return Response({"status": 200, "responseText": "This file has been starred." if file.starred or request.user.starred_files.contains(file) else "This file has been unstarred"})
-            except:
-                return Response({"status": 404, "responseText": "This file was not found"}, status=404)
+
+                # Return response based on whether the file is starred or not
+                is_starred = file.starred or request.user.starred_files.contains(file)
+                response_text = "This file has been starred." if is_starred else "This file has been unstarred."
+
+                return Response({"status": 200, "responseText": response_text}, status=status.HTTP_200_OK)
+
+            except File.DoesNotExist:
+                # Return 404 if file is not found
+                return Response({"status": 404, "responseText": "This file was not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        else:
+            # Return serializer errors if validation fails
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class FileBaseSerializer(serializers.Serializer):
     file_id = serializers.UUIDField()
 
-class StarFileAPIView(APIView):
-    serializer_class = FileBaseSerializer
-    parser_classes = [JSONParser]
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        file_id = request.POST.get('file_id')
-        serializer = self.serializer_class(file_id)
-        if serializer.is_valid():
-            try:
-                file = File.objects.get(id=file_id)
-                if not file.has_perm(request.user.id):
-                    return Response({"status": 403, "responseText": "Action denied"}, status=status.HTTP_403_FORBIDDEN)
-                if file.owner == request.user:
-                    if file.starred:
-                        file.starred = False
-                    else:
-                        file.starred = True
-                else:
-                    user = request.user
-                    if user.starred_files.contains(file):
-                        user.starred_files.remove(file)
-                    else:
-                        user.starred_files.add(file)
-                    user.save()
-                file.save()
-                return Response({"status": 200, "responseText": "This file has been starred." if file.starred or request.user.starred_files.contains(file) else "This file has been unstarred"}, status=status.HTTP_200_OK)
-            except:
-                return Response({"status": 404, "responseText": "This file was not found"}, status=status.HTTP_404_NOT_FOUND)
+# class StarFileAPIView(APIView):
+#     serializer_class = FileBaseSerializer
+#     parser_classes = [JSONParser]
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         file_id = request.POST.get('file_id')
+#         # Pass `file_id` as data to the serializer
+#         serializer = self.serializer_class(data={'file_id': file_id})
+#         # serializer = self.serializer_class(file_id)
+#         if serializer.is_valid():
+#             file_id = serializer.validated_data['file_id']  # Extract validated `file_id`
+#             try:
+#                 file = File.objects.get(id=file_id)
+#                 if not file.has_perm(request.user.id):
+#                     return Response({"status": 403, "responseText": "Action denied"}, status=status.HTTP_403_FORBIDDEN)
+#                 if file.owner == request.user:
+#                     if file.starred:
+#                         file.starred = False
+#                     else:
+#                         file.starred = True
+#                 else:
+#                     user = request.user
+#                     if user.starred_files.contains(file):
+#                         user.starred_files.remove(file)
+#                     else:
+#                         user.starred_files.add(file)
+#                     user.save()
+#                 file.save()
+#                 return Response({"status": 200, "responseText": "This file has been starred." if file.starred or request.user.starred_files.contains(file) else "This file has been unstarred"}, status=status.HTTP_200_OK)
+#             except:
+#                 return Response({"status": 404, "responseText": "This file was not found"}, status=status.HTTP_404_NOT_FOUND)
             
 def get_file_or_404(model, item_id):
     try:
@@ -1659,30 +1689,134 @@ class BinFileAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        file_id = request.POST.get('file_id')
-        serializer = self.serializer_class(file_id)
+        # Retrieve file_id from request.data (works for both JSON and form data)
+        file_id = request.data.get('file_id')
+
+        # Check if file_id is provided in the request
+        if not file_id:
+            return Response({"status": 400, "responseText": "File ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Pass file_id as data to the serializer for validation
+        serializer = self.serializer_class(data={'file_id': file_id})
+
+        # Validate the serializer data
         if serializer.is_valid():
+            file_id = serializer.validated_data['file_id']  # Extract validated file_id
+
             try:
-                file = Folder.objects.get(id=file_id)
+                # Fetch the file using the file_id
+                file = File.objects.get(id=file_id)
+
+                # Permission check: ensure user has the necessary permissions
                 if not file.is_editor(request.user.id):
                     if not file.has_perm(request.user.id):
                         return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-                else:
-                    file.access_list.remove(request.user)
-                    file.save()
-                    if SharedFile.objects.filter(user=request.user, file=file).exists():
-                        SharedFile.objects.get(user=request.user, file=file).delete()
-                    return Response({"status": 200, "responseText": "You have removed this file from your view."}, status=status.HTTP_200_OK)
+
+                # If user has permission, bin or restore the file
                 if not file.binned:
+                    # If the file is not yet binned, bin the file by setting the current datetime
                     file.binned = datetime.now()
                     file.save()
                     return Response({"status": 200, "responseText": "This file has been moved to bin"}, status=status.HTTP_200_OK)
                 else:
+                    # If the file is already binned, restore the file by setting `binned` to None
                     file.binned = None
                     file.save()
                     return Response({"status": 200, "responseText": "This file has been restored"}, status=status.HTTP_200_OK)
-            except:
+
+            except File.DoesNotExist:
                 return Response({"status": 404, "responseText": "This file was not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # If serializer data is invalid, return the validation errors
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# class BinFileAPIView(APIView):
+#     serializer_class = FileBaseSerializer
+#     parser_classes = [JSONParser]
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         # Retrieve file_id from request.data (handles both JSON and form data)
+#         file_id = request.data.get('file_id')
+
+#         # Check if file_id is provided in the request
+#         if not file_id:
+#             return Response({"status": 400, "responseText": "File ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Pass file_id as data to the serializer for validation
+#         serializer = self.serializer_class(data={'file_id': file_id})
+
+#         # Validate the serializer data
+#         if serializer.is_valid():
+#             file_id = serializer.validated_data['file_id']  # Extract validated file_id
+
+#             try:
+#                 # Fetch the file using the file_id
+#                 file = File.objects.get(id=file_id)
+
+#                 # Permission check: ensure user has the necessary permissions
+#                 if not file.is_editor(request.user.id):
+#                     if not file.has_perm(request.user.id):
+#                         return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+                
+#                 # If the user has permission, remove the file from the user's access list
+#                 else:
+#                     file.access_list.remove(request.user)
+#                     file.save()
+
+#                     # Remove any shared file record if it exists
+#                     if SharedFile.objects.filter(user=request.user, file=file).exists():
+#                         SharedFile.objects.get(user=request.user, file=file).delete()
+
+#                     return Response({"status": 200, "responseText": "You have removed this file from your view."}, status=status.HTTP_200_OK)
+
+#                 # Bin the file or restore it based on its current state
+#                 if not file.binned:
+#                     file.binned = datetime.now()
+#                     file.save()
+#                     return Response({"status": 200, "responseText": "This file has been moved to bin"}, status=status.HTTP_200_OK)
+#                 else:
+#                     file.binned = None
+#                     file.save()
+#                     return Response({"status": 200, "responseText": "This file has been restored"}, status=status.HTTP_200_OK)
+            
+#             except File.DoesNotExist:
+#                 return Response({"status": 404, "responseText": "This file was not found."}, status=status.HTTP_404_NOT_FOUND)
+
+#         # If serializer data is invalid, return the validation errors
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# class BinFileAPIView(APIView):
+#     serializer_class = FileBaseSerializer
+#     parser_classes = [JSONParser]
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         file_id = request.POST.get('file_id')
+#         serializer = self.serializer_class(file_id)
+#         if serializer.is_valid():
+#             file_id = serializer.validated_data['file_id']  # Extract validated `file_id`
+#             try:
+#                 file = File.objects.get(id=file_id)
+#                 if not file.is_editor(request.user.id):
+#                     if not file.has_perm(request.user.id):
+#                         return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+#                 else:
+#                     file.access_list.remove(request.user)
+#                     file.save()
+#                     if SharedFile.objects.filter(user=request.user, file=file).exists():
+#                         SharedFile.objects.get(user=request.user, file=file).delete()
+#                     return Response({"status": 200, "responseText": "You have removed this file from your view."}, status=status.HTTP_200_OK)
+#                 if not file.binned:
+#                     file.binned = datetime.now()
+#                     file.save()
+#                     return Response({"status": 200, "responseText": "This file has been moved to bin"}, status=status.HTTP_200_OK)
+#                 else:
+#                     file.binned = None
+#                     file.save()
+#                     return Response({"status": 200, "responseText": "This file has been restored"}, status=status.HTTP_200_OK)
+#             except:
+#                 return Response({"status": 404, "responseText": "This file was not found."}, status=status.HTTP_404_NOT_FOUND)
 
 class FolderBaseSerializer(serializers.Serializer):
     folder_id = serializers.UUIDField()
