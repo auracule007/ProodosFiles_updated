@@ -1689,46 +1689,31 @@ class BinFileAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Retrieve file_id from request.data (works for both JSON and form data)
         file_id = request.data.get('file_id')
-
-        # Check if file_id is provided in the request
         if not file_id:
             return Response({"status": 400, "responseText": "File ID is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Pass file_id as data to the serializer for validation
         serializer = self.serializer_class(data={'file_id': file_id})
-
-        # Validate the serializer data
         if serializer.is_valid():
             file_id = serializer.validated_data['file_id']  # Extract validated file_id
 
             try:
-                # Fetch the file using the file_id
                 file = File.objects.get(id=file_id)
-
-                # Permission check: ensure user has the necessary permissions
                 if not file.is_editor(request.user.id):
                     if not file.has_perm(request.user.id):
                         return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
-                # If user has permission, bin or restore the file
                 if not file.binned:
-                    # If the file is not yet binned, bin the file by setting the current datetime
                     file.binned = datetime.now()
                     file.save()
                     return Response({"status": 200, "responseText": "This file has been moved to bin"}, status=status.HTTP_200_OK)
                 else:
-                    # If the file is already binned, restore the file by setting `binned` to None
                     file.binned = None
                     file.save()
                     return Response({"status": 200, "responseText": "This file has been restored"}, status=status.HTTP_200_OK)
 
             except File.DoesNotExist:
                 return Response({"status": 404, "responseText": "This file was not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # If serializer data is invalid, return the validation errors
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 # class BinFileAPIView(APIView):
 #     serializer_class = FileBaseSerializer
