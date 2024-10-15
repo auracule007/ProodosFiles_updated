@@ -1926,73 +1926,11 @@ class DeletePermFileAPIView(APIView):
             except:
                 return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
 
-class RenameFileSerializer(serializers.Serializer):
-    file_id = serializers.UUIDField()
-    override = serializers.BooleanField(default=False)
-    new_name = serializers.CharField()
 
-class RenameFolderSerializer(serializers.Serializer):
-    folder_id = serializers.UUIDField()
-    override = serializers.BooleanField(default=False)
-    new_name = serializers.CharField()
-
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
-import shutil  # More robust way of copying/renaming files
-from django.db import transaction  # For atomic operations
-
-class RenameFileAPIView(APIView):
-    serializer_class = RenameFileSerializer
-    parser_classes = [JSONParser]
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid():
-            try:
-                # Get the file from the database using file_id
-                file = File.objects.get(id=request.data.get('file_id'))
-                new_name = request.data.get('new_name')
-
-                # Check if the user has permission to edit the file
-                if not file.is_editor(request.user.id):
-                    return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
-                # Get the current file's path and extension
-                old_file_path = file.file.path  # Full path to the file
-                file_extension = os.path.splitext(file.name)[1]  # Keep the current file extension
-                new_file_name = f"{new_name}{file_extension}"
-                
-                # Ensure atomicity for database operations
-                with transaction.atomic():
-                    # Build the new file path
-                    new_file_path = os.path.join(os.path.dirname(old_file_path), new_file_name)
-                    
-                    # Use Django's storage system for renaming files
-                    if default_storage.exists(new_file_path):
-                        return Response({"status": 400, "responseText": "A file with the new name already exists."}, status=status.HTTP_400_BAD_REQUEST)
-
-                    # Rename/move file to the new path
-                    default_storage.save(new_file_path, ContentFile(default_storage.open(old_file_path).read()))
-                    default_storage.delete(old_file_path)  # Delete the old file
-                    
-                    # Update the file object in the database
-                    file.name = new_file_name  # Update the file's name in the database
-                    file.file.name = os.path.relpath(new_file_path, settings.MEDIA_ROOT)  # Update the file field
-                    file.save()
-
-                return Response({"status": 200, "responseText": "File renamed successfully."}, status=status.HTTP_200_OK)
-
-            except File.DoesNotExist:
-                return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
-            except PermissionError:
-                return Response({"status": 403, "responseText": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
-            except OSError as e:
-                return Response({"status": 500, "responseText": f"File system error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            except Exception as e:
-                return Response({"status": 500, "responseText": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response({"status": 400, "responseText": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+# from django.core.files.storage import default_storage
+# from django.core.files.base import ContentFile
+# import shutil  # More robust way of copying/renaming files
+# from django.db import transaction  # For atomic operations
 
 # class RenameFileAPIView(APIView):
 #     serializer_class = RenameFileSerializer
@@ -2014,29 +1952,93 @@ class RenameFileAPIView(APIView):
 #                 # Get the current file's path and extension
 #                 old_file_path = file.file.path  # Full path to the file
 #                 file_extension = os.path.splitext(file.name)[1]  # Keep the current file extension
-                
-#                 # Build the new file name
 #                 new_file_name = f"{new_name}{file_extension}"
                 
-#                 # Create the new full path with the new file name (keeping the same directory)
-#                 new_file_path = os.path.join(os.path.dirname(old_file_path), new_file_name)
+#                 # Ensure atomicity for database operations
+#                 with transaction.atomic():
+#                     # Build the new file path
+#                     new_file_path = os.path.join(os.path.dirname(old_file_path), new_file_name)
+                    
+#                     # Use Django's storage system for renaming files
+#                     if default_storage.exists(new_file_path):
+#                         return Response({"status": 400, "responseText": "A file with the new name already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
-#                 # Rename the file in the file system
-#                 os.rename(old_file_path, new_file_path)
-                
-#                 # Update the file's name and file field in the database
-#                 file.name = new_file_name  # Update the name in the database
-#                 file.file.name = os.path.relpath(new_file_path, settings.MEDIA_ROOT)  # Update the file path relative to MEDIA_ROOT
-#                 file.save()
+#                     # Rename/move file to the new path
+#                     default_storage.save(new_file_path, ContentFile(default_storage.open(old_file_path).read()))
+#                     default_storage.delete(old_file_path)  # Delete the old file
+                    
+#                     # Update the file object in the database
+#                     file.name = new_file_name  # Update the file's name in the database
+#                     file.file.name = os.path.relpath(new_file_path, settings.MEDIA_ROOT)  # Update the file field
+#                     file.save()
 
 #                 return Response({"status": 200, "responseText": "File renamed successfully."}, status=status.HTTP_200_OK)
 
 #             except File.DoesNotExist:
 #                 return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+#             except PermissionError:
+#                 return Response({"status": 403, "responseText": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+#             except OSError as e:
+#                 return Response({"status": 500, "responseText": f"File system error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 #             except Exception as e:
 #                 return Response({"status": 500, "responseText": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 #         return Response({"status": 400, "responseText": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+
+class RenameFileSerializer(serializers.Serializer):
+    file_id = serializers.UUIDField()
+    override = serializers.BooleanField(default=False)
+    new_name = serializers.CharField()
+
+class RenameFolderSerializer(serializers.Serializer):
+    folder_id = serializers.UUIDField()
+    override = serializers.BooleanField(default=False)
+    new_name = serializers.CharField()
+
+class RenameFileAPIView(APIView):
+    serializer_class = RenameFileSerializer
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            try:
+                # Get the file from the database using file_id
+                file = File.objects.get(id=request.data.get('file_id'))
+                new_name = request.data.get('new_name')
+
+                # Check if the user has permission to edit the file
+                if not file.is_editor(request.user.id):
+                    return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+                # Get the current file's path and extension
+                old_file_path = file.file.path  # Full path to the file
+                file_extension = os.path.splitext(file.name)[1]  # Keep the current file extension
+                
+                # Build the new file name
+                new_file_name = f"{new_name}{file_extension}"
+                
+                # Create the new full path with the new file name (keeping the same directory)
+                new_file_path = os.path.join(os.path.dirname(old_file_path), new_file_name)
+
+                # Rename the file in the file system
+                os.replace(old_file_path, new_file_path)
+                # os.rename(old_file_path, new_file_path)
+                
+                # Update the file's name and file field in the database
+                file.name = new_file_name  # Update the name in the database
+                file.file.name = os.path.relpath(new_file_path, settings.MEDIA_ROOT)  # Update the file path relative to MEDIA_ROOT
+                file.save()
+
+                return Response({"status": 200, "responseText": "File renamed successfully."}, status=status.HTTP_200_OK)
+
+            except File.DoesNotExist:
+                return Response({"status": 404, "responseText": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({"status": 500, "responseText": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"status": 400, "responseText": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # class RenameFileAPIView(APIView):
