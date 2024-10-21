@@ -212,7 +212,7 @@ class ResendVerificationEmailView(views.APIView):
             return Response({'responseText': 'Email sent if it exists on our server.'}, status=status.HTTP_200_OK)
         
         except CustomUser.DoesNotExist:
-            return Response({'responseText': 'Email sent if it exists on our server.'}, status=status.HTTP_200_BAD_REQUEST)
+            return Response({'responseText': 'Email sent if it exists on our server.'}, status=status.HTTP_200_OK)
     
     def send_verification(self, request, user, url):
         current_site = get_current_site(request)
