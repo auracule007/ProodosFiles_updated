@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-!#v=nxvbnakx56tnb3@x)c0qu5!6=7^t=xkbjs=hlayhsfb!28'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 def load_key():
     with open('mykey.key', 'r') as keyfile:
