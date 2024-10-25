@@ -531,7 +531,7 @@ class PasswordResetRequestAPIView(APIView):
             uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
 
             # Get the domain of the current site (needed for email)
-            url = serializer.validated_data('url')
+            url = serializer.validated_data['url']
             self.send_reset(request, user, url, token, uidb64)
             return Response({'responseText': "Email sent successfully"})
         response = {'responseText': []}
