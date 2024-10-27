@@ -144,8 +144,12 @@ SPECTACULAR_SETTINGS = {
 # Replace the DATABASES section of your settings.py with this
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'proodosf',
+        'USER': 'proodosf_owner',
+        'PASSWORD': '9XDTRVWuAs1K',
+        'HOST': 'ep-odd-sky-a26cv3fy.eu-central-1.aws.neon.tech',
+        'PORT': 5432,
     }
 }
 
