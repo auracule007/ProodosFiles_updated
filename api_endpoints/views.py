@@ -159,7 +159,7 @@ class RegisterView(generics.CreateAPIView):
         # Handle exceptions raised by the serializer
         if isinstance(exc, serializers.ValidationError):
             # Format validation errors as JSON
-            print(exc.detail)
+            # print(exc.detail)
             result = []
             for key in exc.detail:
                 for errors in exc.detail[key]:
