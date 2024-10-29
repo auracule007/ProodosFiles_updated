@@ -1921,34 +1921,17 @@ class ZipFolderAPIView(APIView):
                 if not folder.is_editor(request.user.id):
                     return Response({"status": 403, "responseText": "Action denied"}, status=status.HTTP_403_FORBIDDEN)
 
-                # Create a zip file in memory
-                in_memory_zip = io.BytesIO()
-                with zipfile.ZipFile(in_memory_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    # Add all files in the folder to the zip
-                    self.add_folder_to_zip(zipf, folder)
+                save_path = folder.parent.get_path() if folder.parent else os.path.join(settings.MEDIA_ROOT, request.user.username)
 
-                in_memory_zip.seek(0)  # Reset file pointer to the start
+                zip_file = create_zip_file(folder, save_path)
 
-                # Handling folder name (ensure no None)
-                folder_name = folder.name if folder.name else 'folder'
-                zip_file_name = f"{folder_name}.zip"
-                print(f"Folder name is: {folder_name}")  # Log the folder name
-                
-                # Create and save the zip file in Django's storage
-                zip_file = ContentFile(in_memory_zip.read())
-
-                # Ensure folder.parent is not None, or handle it properly
-                file=default_storage.save(zip_file_name, zip_file),
-                new_file = File.objects.create(
-                    name=zip_file_name,
+                File.objects.create(
+                    name=f"{folder.name}.zip",
+                    file=zip_file,
                     owner=request.user,
-                   parent=  folder_id if folder.parent else None  # Handle None parent folders
+                    size=os.path.getsize(zip_file),
+                    parent=folder.parent
                 )
-                # parent_folder = folder_id
-                # # parent_folder = folder.parent if folder.parent else None
-                # print(f"Parent folder is: {parent_folder}")  # Log the parent folder
-
-                
 
                 return Response({"status": 200, "responseText": "Folder zipped successfully", "file_id": file}, status=status.HTTP_200_OK)
 
