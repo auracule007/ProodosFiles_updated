@@ -1939,12 +1939,12 @@ class ZipFolderAPIView(APIView):
 
                 # Ensure folder.parent is not None, or handle it properly
                 file=default_storage.save(zip_file_name, zip_file),
-                # new_file = File.objects.create(
-                #     name=zip_file_name,
-                #     owner=request.user,
-                #     # parent=null  # Handle None parent folders
-                #    parent=  folder_id if folder.parent else str(None)  # Handle None parent folders
-                # )
+                new_file = File.objects.create(
+                    name=zip_file_name,
+                    owner=request.user,
+                    # parent=null  # Handle None parent folders
+                   parent=  folder_id if folder.parent else str(None)  # Handle None parent folders
+                )
                 # parent_folder = folder_id
                 # # parent_folder = folder.parent if folder.parent else None
                 # print(f"Parent folder is: {parent_folder}")  # Log the parent folder
