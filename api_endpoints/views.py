@@ -1940,6 +1940,7 @@ class ZipFolderAPIView(APIView):
             except Exception as e:
                 # Log the exact error for debugging
                 print(f"Error during zipping: {e}")  # Debugging
+                raise e
                 return Response({"status": 500, "responseText": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
