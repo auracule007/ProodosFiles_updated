@@ -1942,8 +1942,7 @@ class ZipFolderAPIView(APIView):
                 new_file = File.objects.create(
                     name=zip_file_name,
                     owner=request.user,
-                    # parent=null  # Handle None parent folders
-                   parent=  folder_id if folder.parent else str(None)  # Handle None parent folders
+                   parent=  folder_id if folder.parent else None  # Handle None parent folders
                 )
                 # parent_folder = folder_id
                 # # parent_folder = folder.parent if folder.parent else None
