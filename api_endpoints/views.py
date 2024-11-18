@@ -470,7 +470,7 @@ class FileUploadView(APIView):
                 file_instance = File(
                     name=os.path.basename(uploaded_file.name),
                     owner=request.user,
-                    parent=None,
+                    parent=folder,
                     file=uploaded_file,
                     size=uploaded_file.size
                 )
