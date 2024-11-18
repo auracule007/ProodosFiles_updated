@@ -393,7 +393,8 @@ class LoginView(APIView):
             user = serializer.validated_data
             # if Token.objects.filter(user=user).exists():
             #     Token.objects.get(user=user).delete()
-            token, created = Token.objects.get_or_create(user=user)
+            token, created = Token.
+            objects.get_or_create(user=user)
             response = {'token': token.key, 'username': user.username, 'full_name': user.full_name, "email": user.email}
             print(response)
             return Response(response, status=200)
@@ -849,10 +850,14 @@ class FileSerializer(serializers.ModelSerializer):
     class Meta:
         model = File
         fields = ['id', 'name', 'size', 'owner', 'starred']
+
+
 class UserFileSerializer(serializers.ModelSerializer):
+    owner = serializers.CharField(source='owner.username', read_only=True)
+    
     class Meta:
         model = File
-        fields = ['id', 'name', 'owner', 'file']  # Include all required fields
+        fields = ['name', 'owner', 'description', 'upload_date', 'last_accessed', 'size']  # Include all required fields
 
 # Added
 class UserFilesAPIView(APIView):
@@ -871,10 +876,11 @@ class UserFilesAPIView(APIView):
 class FolderSerializer(serializers.ModelSerializer):
     subfolders = serializers.SerializerMethodField()
     files = serializers.SerializerMethodField()
+    owner = serializers.CharField(source='owner.username', read_only=True)
 
     class Meta:
         model = Folder
-        fields = ['id', 'name', 'owner', 'created_at', 'subfolders', 'files']
+        fields = ['name', 'owner', 'created_at', 'subfolders', 'files']
 
     def get_subfolders(self, obj):
         # Serializing the subfolders of the folder
@@ -905,11 +911,13 @@ class FolderViewAPIView(APIView):
             return Response({"status": 400, "responseText": "folder_id is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Fetch the folder based on the provided folder_id
-        folder = get_object_or_404(Folder, id=folder_id)
-
+        try:
+            folder = Folder.objects.get(id=folder_id)
+        except:
+            return Response({"status": 404, "responseText": "Folder not found"}, status=status.HTTP_404_NOT_FOUND)
         # Check if the user has permission to access the folder
-        # if not folder.has_perm(request.user.id):
-        #     return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+        if not folder.has_perm(request.user.id):
+            return Response({"status": 403, "responseText": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
         # If the user is the owner, increase the access count
         if folder.owner == request.user:
