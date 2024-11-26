@@ -67,9 +67,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     
     # Add the URL field with the validator
-    url = serializers.URLField(
-        required=True
-    )
+    # url = serializers.URLField(
+    #     required=True
+    # )
+
+    url = "https://proodos-files-ff33.vercel.app/"
     
     
     class Meta:
