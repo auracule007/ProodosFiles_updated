@@ -131,6 +131,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
+    parser_classes = [JSONParser]
 
     @extend_schema(
             description="API for registering user details. URL field is required for this to work."
