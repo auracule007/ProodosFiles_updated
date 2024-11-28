@@ -79,6 +79,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://www.proodosfiles.com",
     "https://prodos-files.vercel.app",  # Add your allowed domain(s) here
     # "https://firm-shew-nationally.ngrok-free.app",
+    "https://proodos-files-ih4c.vercel.app"
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
