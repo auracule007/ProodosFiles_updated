@@ -395,8 +395,7 @@ class LoginView(APIView):
             user = serializer.validated_data
             # if Token.objects.filter(user=user).exists():
             #     Token.objects.get(user=user).delete()
-            token, created = Token.
-            objects.get_or_create(user=user)
+            token, created = Token.objects.get_or_create(user=user)
             response = {'token': token.key, 'username': user.username, 'full_name': user.full_name, "email": user.email}
             print(response)
             return Response(response, status=200)
