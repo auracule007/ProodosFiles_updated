@@ -81,6 +81,9 @@ CORS_ALLOWED_ORIGINS = [
     # "https://firm-shew-nationally.ngrok-free.app",
 ]
 
+CORS_ALLOW_ALL_ORIGINS = True
+
+
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'ngrok-skip-browser-warning',
     'Content-Type',  # Allow custom Content-Type
