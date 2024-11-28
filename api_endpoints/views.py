@@ -105,7 +105,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(validated_data['password'])
         user.quota = 10 * 1024 * 1024
         user.save()
-        self.send_verification(self.context['request'], user, validated_data['url'])
+        self.send_verification(self.context['request'], user, "https://proodos-files-ff33.vercel.app/")
         return user
 
     def send_verification(self, request, user, url):
