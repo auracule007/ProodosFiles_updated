@@ -382,7 +382,7 @@ class PlainTextParser(BaseParser):
 
 class LoginView(APIView):
     serializer_class = LoginSerializer
-    parser_classes = [PlainTextParser, JSONParser]  # Specify the serializer class
+    parser_classes = [JSONParser]  # Specify the serializer class
     
     @extend_schema(
         description="API for login. Sends back a token to be saved on browser."
