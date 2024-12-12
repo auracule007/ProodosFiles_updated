@@ -380,7 +380,7 @@ class LoginSerializer(serializers.Serializer):
         print(user)
         if user:
             return user
-        raise serializers.ValidationError(f"{username} {password}")
+        raise serializers.ValidationError(f"Invalid credentials or account not activated.")
 
 class LoginView(APIView):
     serializer_class = LoginSerializer
