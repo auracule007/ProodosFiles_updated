@@ -356,19 +356,6 @@ def authenticates(email=None, password=None, **kwargs):
             return user
     return None
 
-class LoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField()
-
-    def validate(self, data):
-        username = data.get('email')
-        password = data.get('password')
-        user = authenticate(email=username, password=password)
-        print(user)
-        if user:
-            return user
-        raise serializers.ValidationError(f"{username} {password}")
-
 class PlainTextParser(BaseParser):
     """
     Plain text parser for handling text/plain requests.
@@ -380,6 +367,20 @@ class PlainTextParser(BaseParser):
         Simply return a string from the incoming request.
         """
         return stream.read().decode('utf-8')
+
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+
+    def validate(self, data):
+        username = data.get('email')
+        password = data.get('password')
+        user = authenticate(username=username, password=password)
+        print(user)
+        if user:
+            return user
+        raise serializers.ValidationError(f"{username} {password}")
 
 class LoginView(APIView):
     serializer_class = LoginSerializer
