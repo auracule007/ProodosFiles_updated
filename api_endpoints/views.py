@@ -367,7 +367,7 @@ class LoginSerializer(serializers.Serializer):
         print(user)
         if user:
             return user
-        raise serializers.ValidationError(f"{username} {email}")
+        raise serializers.ValidationError(f"{username} {password}")
 
 class PlainTextParser(BaseParser):
     """
