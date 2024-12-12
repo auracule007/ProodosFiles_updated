@@ -367,7 +367,7 @@ class LoginSerializer(serializers.Serializer):
         print(user)
         if user:
             return user
-        raise serializers.ValidationError("Invalid credentials or account not activated.")
+        raise serializers.ValidationError(f"{user}")
 
 class PlainTextParser(BaseParser):
     """
