@@ -363,7 +363,7 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, data):
         username = data.get('email')
         password = data.get('password')
-        user = authenticates(email=username, password=password)
+        user = authenticate(email=username, password=password)
         print(user)
         if user:
             return user
