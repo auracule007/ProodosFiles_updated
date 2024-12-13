@@ -390,7 +390,7 @@ class LoginView(APIView):
     )
     def post(self, request, *args, **kwargs):
         # request['Referrer-Policy'] = 'no-referrer'
-        serializer = self.serializer_class(data=request.data)))
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data
             # if Token.objects.filter(user=user).exists():
