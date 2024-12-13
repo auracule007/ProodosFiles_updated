@@ -643,7 +643,7 @@ class FolderCreateSerializer(serializers.Serializer):
             except Folder.DoesNotExist:
                 raise serializers.ValidationError({"parent_folder_id": "The parent folder does not exist."})
         else:
-            if Folder.objects.filter(name=folder_name, owner=request.user).exists():
+            if Folder.objects.filter(name=folder_name, owner=self.context['request'].user).exists():
                 raise serializers.ValidationError({"folder_name": "A folder with that name already exists."})
 
         return data
