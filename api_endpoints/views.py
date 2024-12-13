@@ -697,7 +697,7 @@ class FolderCreateAPIView(APIView):
         description="API for creating folder. Folder id will be required if folder is not created in root directory. Authentication required."
     )
     def post(self, request):
-        serializer = FolderCreateSerializer(data=request.data)
+        serializer = FolderCreateSerializer(data=request.data, context={'request': request})
         
         if serializer.is_valid():
             folder_name = serializer.validated_data['folder_name']
