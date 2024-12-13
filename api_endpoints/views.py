@@ -369,46 +369,90 @@ class PlainTextParser(BaseParser):
         return stream.read().decode('utf-8')
 
 
+# class LoginSerializer(serializers.Serializer):
+#     email = serializers.EmailField()
+#     password = serializers.CharField()
+
+#     def validate(self, data):
+#         username = data.get('email')
+#         password = data.get('password')
+#         user = authenticate(username=username, password=password)
+#         if user:
+#             return user
+#         raise serializers.ValidationError(f"Invalid credentials or account not activated.")
+
+# class LoginView(APIView):
+#     serializer_class = LoginSerializer
+#     parser_classes = [JSONParser]  # Specify the serializer class
+    
+#     @extend_schema(
+#         description="API for login. Sends back a token to be saved on browser."
+#     )
+#     def post(self, request, *args, **kwargs):
+#         # request['Referrer-Policy'] = 'no-referrer'
+#         serializer = self.serializer_class(data=request.data)))
+#         if serializer.is_valid():
+#             user = serializer.validated_data
+#             # if Token.objects.filter(user=user).exists():
+#             #     Token.objects.get(user=user).delete()
+#             token, created = Token.objects.get_or_create(user=user)
+#             response = {'token': token.key, 'username': user.username, 'full_name': user.full_name, "email": user.email}
+#             print(response)
+#             return Response(response, status=200)
+#         response = {'responseText': []}
+#         for key in serializer.errors.keys():
+#             for err in serializer.errors[key]:
+#                 response['responseText'].append(err)
+#         return Response(response, status=400)
+
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField()
 
     def validate(self, data):
-        username = data.get('email')
-        password = data.get('password')
-        user = authenticate(username=username, password=password)
-        print(user)
+        user = authenticate(username=data.get('email'), password=data.get('password'))
         if user:
             return user
-        raise serializers.ValidationError(f"Invalid credentials or account not activated.")
+        raise serializers.ValidationError("Invalid credentials or account not activated.")
 
 class LoginView(APIView):
     serializer_class = LoginSerializer
-    parser_classes = [JSONParser]  # Specify the serializer class
-    
-    @extend_schema(
-        description="API for login. Sends back a token to be saved on browser."
-    )
+    parser_classes = [JSONParser]
+
+    @extend_schema(description="API for login. Sends back a token to be saved on browser.")
     def post(self, request, *args, **kwargs):
-        # request['Referrer-Policy'] = 'no-referrer'
-        serializer = self.serializer_class(data=eval(str(request.data)))
-        print(eval(str(request.data)))
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data
-            # if Token.objects.filter(user=user).exists():
-            #     Token.objects.get(user=user).delete()
-            token, created = Token.objects.get_or_create(user=user)
-            response = {'token': token.key, 'username': user.username, 'full_name': user.full_name, "email": user.email}
-            print(response)
+
+            # Caching the token
+            cache_key = f"user_token_{user.id}"
+            token_key = cache.get(cache_key)
+            
+            if not token_key:
+                # If token not in cache, update or create and store in cache
+                token, _ = Token.objects.update_or_create(user=user, defaults={'key': Token.generate_key()})
+                cache.set(cache_key, token.key, timeout=3600)  # Cache for 1 hour
+            else:
+                # Fetch token from the database if cached key exists
+                token = Token.objects.get(key=token_key)
+
+            # Construct the response payload
+            response = {
+                'token': token.key,
+                'username': user.username,
+                'full_name': getattr(user, 'full_name', None),
+                'email': user.email
+            }
             return Response(response, status=200)
-        print('bad')
-        response = {'responseText': []}
-        for key in serializer.errors.keys():
-            for err in serializer.errors[key]:
-                response['responseText'].append(err)
-        print(response)
+
+        # Collect error messages efficiently
+        response = {
+            'responseText': [err for errors in serializer.errors.values() for err in errors]
+        }
         return Response(response, status=400)
-    
+
+
 class FileUploadSerializer(serializers.Serializer):
     files = serializers.ListField(
         child=serializers.FileField(),
