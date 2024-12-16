@@ -22,7 +22,7 @@ from rest_framework.parsers import MultiPartParser, JSONParser, BaseParser
 
 from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
 from django.utils.http import urlencode
-from django.urls import reverse
+
 from django.shortcuts import get_object_or_404, redirect, render
 from django.core.validators import RegexValidator
 from django.contrib.auth.decorators import login_required
