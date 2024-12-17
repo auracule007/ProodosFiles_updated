@@ -22,6 +22,7 @@ from rest_framework.parsers import MultiPartParser, JSONParser, BaseParser
 
 from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
 from django.utils.http import urlencode
+from django.db import transaction
 
 from django.shortcuts import get_object_or_404, redirect, render
 from django.core.validators import RegexValidator
@@ -493,8 +494,6 @@ class FileUploadSerializer(serializers.Serializer):
 class FileUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
-
-    from django.db import transaction
 
     def post(self, request):
         serializer = FileUploadSerializer(data=request.data)
