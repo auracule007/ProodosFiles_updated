@@ -968,7 +968,7 @@ class UserFilesAPIView(APIView):
 
     def get(self, request):
         # Fetch all files uploaded by the authenticated user
-        user_files = File.objects.filter(owner=self.request.user, parent=None)
+        user_files = File.objects.filter(owner=request.user, parent=None)
 
         # Serialize the files
         serializer = UserFileSerializer(user_files, many=True)
