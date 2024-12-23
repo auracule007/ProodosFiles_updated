@@ -59,7 +59,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_spectacular.utils import extend_schema, OpenApiParameter, extend_schema_field, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
-
+url = "https://prodosfiles.vercel.app/"
 
 def createBasicResponse(status=200, responseText='', data=''):
     return {'status': status, 'responseText': responseText, 'data': data}
@@ -72,7 +72,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     #     required=True
     # )
 
-    url = "https://proodos-files-ff33.vercel.app/"
+    # url = "https://proodos-files-ff33.vercel.app/"
     
     
     class Meta:
@@ -106,7 +106,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(validated_data['password'])
         user.quota = 10 * 1024 * 1024
         user.save()
-        self.send_verification(self.context['request'], user, "https://proodosfiles.com/success")
+        self.send_verification(self.context['request'], user, f"{url}/email-verification-success")
         return user
 
     def send_verification(self, request, user, url):
@@ -212,7 +212,7 @@ class ResendVerificationEmailView(views.APIView):
                 return Response({'responseText': 'This account is already verified.'}, status=status.HTTP_400_BAD_REQUEST)
             
             # Resend the verification email
-            RegisterSerializer().send_verification(request, user, request.data.get('url'))
+            RegisterSerializer().send_verification(request, user, f"{url}/email-verification-success")
             return Response({'responseText': 'Email sent if it exists on our server.'}, status=status.HTTP_200_OK)
         
         except CustomUser.DoesNotExist:
@@ -602,7 +602,6 @@ class FileUploadView(APIView):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
-    url = serializers.URLField(required=True)
 
     def validate_email(self, value):
         # Ensure the email exists in the user model
@@ -632,7 +631,7 @@ class PasswordResetRequestAPIView(APIView):
             uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
 
             # Get the domain of the current site (needed for email)
-            url = serializer.validated_data['url']
+            url = f"{url}/reset-password/"
             self.send_reset(request, user, url, token, uidb64)
             return Response({'responseText': "Email sent successfully"})
         response = {'responseText': []}
