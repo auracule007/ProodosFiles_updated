@@ -809,10 +809,10 @@ class PasswordResetAPIView(APIView):
 
     def post(self, request):
         serializer = PasswordResetSerializer(data=request.data)
-        uidb64 = serializer.validated_data['uidb64']
-        token = serializer.validated_data['token']
         
         if serializer.is_valid():
+            uidb64 = serializer.validated_data['uidb64']
+            token = serializer.validated_data['token']
             User = get_user_model()
             try:  
                 uid = force_str(urlsafe_base64_decode(uidb64))  
