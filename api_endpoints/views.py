@@ -789,6 +789,8 @@ class FolderCreateAPIView(APIView):
 class PasswordResetSerializer(serializers.Serializer):
     password1 = serializers.CharField(write_only=True, min_length=8, required=True)
     password2 = serializers.CharField(write_only=True, min_length=8, required=True)
+    uidb64 = serializers.CharField(max_length=1000, required=True)
+    token = serializers.CharField(max_length=1000, required=True)
 
     def validate(self, data):
         if data['password1'] != data['password2']:
@@ -805,8 +807,10 @@ class PasswordResetAPIView(APIView):
     permission_classes = [AllowAny]
     parser_classes = [JSONParser]
 
-    def post(self, request, uidb64, token):
+    def post(self, request):
         serializer = PasswordResetSerializer(data=request.data)
+        uidb64 = serializer.validated_data['uidb64']
+        token = serializer.validated_data['token']
         
         if serializer.is_valid():
             User = get_user_model()
