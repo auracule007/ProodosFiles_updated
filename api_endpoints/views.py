@@ -59,7 +59,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_spectacular.utils import extend_schema, OpenApiParameter, extend_schema_field, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
-url = "https://prodosfiles.vercel.app/"
+url = "https://prodosfiles.vercel.app"
 
 def createBasicResponse(status=200, responseText='', data=''):
     return {'status': status, 'responseText': responseText, 'data': data}
@@ -631,7 +631,7 @@ class PasswordResetRequestAPIView(APIView):
             uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
 
             # Get the domain of the current site (needed for email)
-            url = f"{url}/reset-password/"
+            url = f"https://prodosfiles.vercel.app/reset-password/"
             self.send_reset(request, user, url, token, uidb64)
             return Response({'responseText': "Email sent successfully"})
         response = {'responseText': []}
