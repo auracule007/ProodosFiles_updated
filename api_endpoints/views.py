@@ -453,6 +453,7 @@ class LoginView(APIView):
 #         }
 #         return Response(response, status=400)
 
+from django.db import transaction
 
 class FileUploadSerializer(serializers.Serializer):
     files = serializers.ListField(
@@ -495,6 +496,79 @@ class FileUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
 
+    def post(self, request):
+        serializer = FileUploadSerializer(data=request.data)
+        if serializer.is_valid():
+            folder_id = serializer.validated_data.get('folder_id')
+            folder = None
+
+            if folder_id:
+                folder = get_object_or_404(Folder, id=folder_id)
+                if not folder.is_editor(request.user.id):
+                    if folder.has_perm(request.user.id):
+                        return Response(
+                            {"responseText": "You do not have permission to upload"},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+                    return Response(
+                        {"responseText": "This action cannot be performed"},
+                        status=status.HTTP_403_NOT_FOUND
+                    )
+
+            files = serializer.validated_data['files']
+            override = serializer.validated_data['override']
+
+            with transaction.atomic():
+                print("Starting file upload...")
+    
+                for uploaded_file in files:
+                    file_instance = File(
+                        name=os.path.basename(uploaded_file.name),
+                        owner=request.user,
+                        parent=folder,
+                        file=uploaded_file,
+                        size=uploaded_file.size
+                    )
+                    file_instance.save(override=override)
+
+                    if folder and folder.owner != request.user:
+                        shared_folder_qs = SharedFolder.objects.filter(folder=folder, shared_by=request.user)
+    
+                        # Avoid multiple queries
+                        shared_files_to_create = []
+                        for sharing in shared_folder_qs:
+                            shared_files_to_create.append(
+                                SharedFile(
+                                    user=sharing.user,
+                                    file=file_instance,
+                                    shared_by=request.user,
+                                    role=sharing.role
+                                )
+                            )
+                        # Add owner sharing
+                        shared_files_to_create.append(
+                            SharedFile(
+                                user=folder.owner,
+                                file=file_instance,
+                                shared_by=request.user,
+                                role=3
+                            )
+                        )
+
+                        # Bulk create shared files
+                        SharedFile.objects.bulk_create(shared_files_to_create, ignore_conflicts=True)
+
+            return Response(
+                {"responseText": "Files have been uploaded successfully"},
+                status=status.HTTP_201_CREATED
+            )
+        else:
+            response = {'responseText': []}
+            for key in serializer.errors.keys():
+                for err in serializer.errors[key]:
+                    response['responseText'].append(err)
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
     # def post(self, request):
     #     serializer = FileUploadSerializer(data=request.data)
     #     if serializer.is_valid():
@@ -505,100 +579,48 @@ class FileUploadView(APIView):
     #                 if folder.has_perm(request.user.id):
     #                     return Response({"responseText": "You do not have permission to upload"}, status=status.HTTP_403_FORBIDDEN)
     #                 return Response({"responseText": "This action cannot be performed"}, status=status.HTTP_403_NOT_FOUND)
+
     #         else:
     #             folder = None
-    
+            
+        
     #         files = serializer.validated_data['files']
     #         override = serializer.validated_data['override']
-    
-    #         with transaction.atomic():
-    #             for uploaded_file in files:
-    #                 file_instance = File(
-    #                     name=os.path.basename(uploaded_file.name),
-    #                     owner=request.user,
-    #                     parent=folder,
-    #                     file=uploaded_file,
-    #                     size=uploaded_file.size
-    #                 )
-    #                 file_instance.save(override=override)
-    
-    #                 if folder:
-    #                     if folder.owner != request.user:
-    #                         shared_folder_qs = SharedFolder.objects.filter(folder=folder, shared_by=request.user)
-    #                         for sharing in shared_folder_qs:
+    #         print("doing something..")
+
+    #         for uploaded_file in files:
+    #             file_instance = File(
+    #                 name=os.path.basename(uploaded_file.name),
+    #                 owner=request.user,
+    #                 parent=folder,
+    #                 file=uploaded_file,
+    #                 size=uploaded_file.size
+    #             )
+    #             file_instance.save(override=override)
+
+    #             if folder:
+    #                 if folder.owner != request.user:
+    #                     if SharedFolder.objects.filter(folder=folder, shared_by=request.user).exists():
+    #                         for sharing in SharedFolder.objects.filter(folder=folder, shared_by=request.user):
     #                             SharedFile.objects.get_or_create(
-    #                                 user=sharing.user,
-    #                                 file=file_instance,
-    #                                 shared_by=request.user,
+    #                                 user=sharing.user, 
+    #                                 file=file_instance, 
+    #                                 shared_by=request.user, 
     #                                 role=sharing.role
     #                             )
-    #                         SharedFile.objects.get_or_create(
-    #                             user=folder.owner,
-    #                             file=file_instance,
-    #                             shared_by=request.user,
-    #                             role=3
-    #                         )
-    
+    #                     SharedFile.objects.get_or_create(
+    #                         user=folder.owner, 
+    #                         file=file_instance, 
+    #                         shared_by=request.user, 
+    #                         role=3
+    #                     )
+
     #         return Response({"responseText": "Files have been uploaded successfully"}, status=status.HTTP_201_CREATED)
     #     response = {'responseText': []}
     #     for key in serializer.errors.keys():
     #         for err in serializer.errors[key]:
     #             response['responseText'].append(err)
     #     return Response(response, status=status.HTTP_400_BAD_REQUEST)
-    
-
-    def post(self, request):
-        serializer = FileUploadSerializer(data=request.data)
-        if serializer.is_valid():
-            folder_id = serializer.validated_data.get('folder_id')
-            if folder_id:
-                folder = get_object_or_404(Folder, id=folder_id)
-                if not folder.is_editor(request.user.id):
-                    if folder.has_perm(request.user.id):
-                        return Response({"responseText": "You do not have permission to upload"}, status=status.HTTP_403_FORBIDDEN)
-                    return Response({"responseText": "This action cannot be performed"}, status=status.HTTP_403_NOT_FOUND)
-
-            else:
-                folder = None
-            
-        
-            files = serializer.validated_data['files']
-            override = serializer.validated_data['override']
-            print("doing something..")
-
-            for uploaded_file in files:
-                file_instance = File(
-                    name=os.path.basename(uploaded_file.name),
-                    owner=request.user,
-                    parent=folder,
-                    file=uploaded_file,
-                    size=uploaded_file.size
-                )
-                file_instance.save(override=override)
-
-                if folder:
-                    if folder.owner != request.user:
-                        if SharedFolder.objects.filter(folder=folder, shared_by=request.user).exists():
-                            for sharing in SharedFolder.objects.filter(folder=folder, shared_by=request.user):
-                                SharedFile.objects.get_or_create(
-                                    user=sharing.user, 
-                                    file=file_instance, 
-                                    shared_by=request.user, 
-                                    role=sharing.role
-                                )
-                        SharedFile.objects.get_or_create(
-                            user=folder.owner, 
-                            file=file_instance, 
-                            shared_by=request.user, 
-                            role=3
-                        )
-
-            return Response({"responseText": "Files have been uploaded successfully"}, status=status.HTTP_201_CREATED)
-        response = {'responseText': []}
-        for key in serializer.errors.keys():
-            for err in serializer.errors[key]:
-                response['responseText'].append(err)
-        return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
