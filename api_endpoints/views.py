@@ -401,9 +401,9 @@ class LoginView(APIView):
             print(response)
             return Response(response, status=200)
         response = {'responseText': []}
-        for key in serializer.errors.keys():
-            for err in serializer.errors[key]:
-                response['responseText'].append(err)
+        for field, errors in serializer.errors.items():
+            for error in errors:
+                response['responseText'].append(f"{field}: {error}")
         return Response(response, status=400)
 
 # class LoginSerializer(serializers.Serializer):
