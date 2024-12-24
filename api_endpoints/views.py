@@ -986,7 +986,7 @@ class FolderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Folder
-        fields = ['name', 'owner', 'created_at', 'subfolders', 'files']
+        fields = ['name', 'owner', 'created_at', 'subfolders', 'files', 'id']
 
     def get_subfolders(self, obj):
         # Serializing the subfolders of the folder
