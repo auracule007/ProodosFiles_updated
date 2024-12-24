@@ -564,9 +564,9 @@ class FileUploadView(APIView):
             )
         else:
             response = {'responseText': []}
-            for key in serializer.errors.keys():
-                for err in serializer.errors[key]:
-                    response['responseText'].append(err)
+            for field, errors in serializer.errors.items():
+                for error in errors:
+                    response['responseText'].append(f"{field}: {error}")
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
     # def post(self, request):
