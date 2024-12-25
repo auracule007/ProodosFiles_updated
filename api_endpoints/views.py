@@ -64,6 +64,19 @@ url = "https://prodosfiles.vercel.app"
 def createBasicResponse(status=200, responseText='', data=''):
     return {'status': status, 'responseText': responseText, 'data': data}
 
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, *args, **kwargs):
+        # Get the token for the currently authenticated user
+        token = request.auth
+        
+        if token:
+            token.delete()  # Delete the token
+            return Response({"responseText": "Successfully logged out"}, status=200)
+        
+        return Response({"responseText": "No active token found"}, status=400)
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     
