@@ -998,7 +998,7 @@ class UserFileSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = File
-        fields = ['name', 'owner', 'description', 'upload_date', 'last_accessed', 'size']  # Include all required fields
+        fields = ['name', 'owner', 'description', 'upload_date', 'last_accessed', 'size', 'id']  # Include all required fields
 
 # Added
 class UserFilesAPIView(APIView):
