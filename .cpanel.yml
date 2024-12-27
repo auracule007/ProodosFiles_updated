@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export PATH=$HOME/repositories/ProodosFiles/virtualenv/bin:$PATH
+    - source ~/repositories/ProodosFiles/virtualenv/bin/activate
+    - pip install -r requirements.txt
+    - python manage.py migrate
+    - touch tmp/restart.txt
