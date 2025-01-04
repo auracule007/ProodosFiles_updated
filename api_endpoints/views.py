@@ -1197,70 +1197,81 @@ class AllFoldersAPIView(APIView):
 
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+class ShareFolderSerializer(serializer.Serializer):
+    folder_id = serializer.CharField(max_length=255)
+    userRole = serializer.IntegerField(choices=[1, 2, 3]
+    everyone = serializer.BooleanField(default=False)
+    usernames = serializer.ListField(
+        child=serializer.CharField(),
+        allow_empty=False,
+    )
 
 class ShareFolderAPIView(APIView):
     permission_classes = [IsAuthenticated]
-
+    serializer_class = ShareFolderSerializer
+    
     def post(self, request):
-        folder_id = request.POST.get('folder_id')
-        folder_instance = get_object_or_404(Folder, id=folder_id)
-
-        # Check if the user has permission to share the folder
-        if folder_instance.is_editor(request.user.id):
-            usernames = request.data.get('usernames', '')
-            share_with_everyone = request.data.get('everyone', False)
-            friend_to_share = request.data.get('friends', [])
-            role = request.data.get('userRole', 1)  # Default role is Viewer (1)
-            # Parse the usernames and friends list
-            usernames = [username.strip() for username in usernames.split(',') if username.strip()]
-
-            for friend in friend_to_share:
-                try:
-                    usernames.append(CustomUser.objects.get(username=friend).username)
-                except:
-                    pass
-            messages = []
-
-            # If not sharing with everyone
-            if not share_with_everyone:
-                if folder_instance.access_everyone:
-                    messages.append("This folder has been removed from everyone's view")
-                folder_instance.access_everyone = False
-                folder_instance.save()
-                # Share with specific users
-                for username in usernames:
-                    user = CustomUser.objects.filter(username=username).first()
-                    if user and user != request.user:
-                        try:
-                            shared_folder, created = SharedFolder.objects.get_or_create(
-                                user=user,
-                                folder=folder_instance,
-                                defaults={
-                                    'shared_by': request.user,
-                                    'role': role
-                                }
-                            )
-                            if not created:
-                                # Update if already shared
-                                shared_folder.shared_by = request.user
-                                shared_folder.role = role
-                                shared_folder.save()
-
-                            share_item_recursive(folder_instance, user, request.user)
-                            messages.append(f'{folder_instance.name} shared with {user.username}')
-                        except Exception as e:
-                            messages.append(f'Failed to share with {username} due to: {str(e)}')
-                    else:
-                        messages.append(f'Failed to share with {username} (invalid username or sharing with yourself).')
-            else:
-                # Share with everyone
-                folder_instance.access_everyone = True
-                folder_instance.save()
-                messages.append(f'{folder_instance.name} shared with everyone')
-
-            return Response({'status': 200, 'responseText': 'Folder shared with selection'}, status=status.HTTP_200_OK)
-
-        return Response({'status': 403, 'responseText': 'You do not have permission to share this folder'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = ShareFolderSerializer(data=request.data)
+        if serializer.is_valid():
+            folder_id = request.POST.get('folder_id')
+            folder_instance = get_object_or_404(Folder, id=folder_id)
+    
+            # Check if the user has permission to share the folder
+            if folder_instance.is_editor(request.user.id):
+                usernames = request.data.get('usernames', '')
+                share_with_everyone = request.data.get('everyone', False)
+                friend_to_share = request.data.get('friends', [])
+                role = request.data.get('userRole', 1)  # Default role is Viewer (1)
+                # Parse the usernames and friends list
+                usernames = [username.strip() for username in usernames.split(',') if username.strip()]
+    
+                for friend in friend_to_share:
+                    try:
+                        usernames.append(CustomUser.objects.get(username=friend).username)
+                    except:
+                        pass
+                messages = []
+    
+                # If not sharing with everyone
+                if not share_with_everyone:
+                    if folder_instance.access_everyone:
+                        messages.append("This folder has been removed from everyone's view")
+                    folder_instance.access_everyone = False
+                    folder_instance.save()
+                    # Share with specific users
+                    for username in usernames:
+                        user = CustomUser.objects.filter(username=username).first()
+                        if user and user != request.user:
+                            try:
+                                shared_folder, created = SharedFolder.objects.get_or_create(
+                                    user=user,
+                                    folder=folder_instance,
+                                    defaults={
+                                        'shared_by': request.user,
+                                        'role': role
+                                    }
+                                )
+                                if not created:
+                                    # Update if already shared
+                                    shared_folder.shared_by = request.user
+                                    shared_folder.role = role
+                                    shared_folder.save()
+    
+                                share_item_recursive(folder_instance, user, request.user)
+                                messages.append(f'{folder_instance.name} shared with {user.username}')
+                            except Exception as e:
+                                messages.append(f'Failed to share with {username} due to: {str(e)}')
+                        else:
+                            messages.append(f'Failed to share with {username} (invalid username or sharing with yourself).')
+                else:
+                    # Share with everyone
+                    folder_instance.access_everyone = True
+                    folder_instance.save()
+                    messages.append(f'{folder_instance.name} shared with everyone')
+    
+                return Response({'status': 200, 'responseText': 'Folder shared with selection'}, status=status.HTTP_200_OK)
+    
+            return Response({'status': 403, 'responseText': 'You do not have permission to share this folder'}, status=status.HTTP_403_FORBIDDEN)
 
     def get(self, request):
         folder_id = request.GET.get('folder_id')
