@@ -1370,7 +1370,7 @@ class BinFolderAPIView(APIView):
     def post(self, request):
         folder_id = request.data.get('folder_id')  # Use request.data for JSON body
         try:
-            folder = Folder.objects.get(id=folder_id)
+            folder = Folder.objects.all_with_binned().get(id=folder_id)
             
             # Permission check: if user is not the owner and has no permission
             if request.user != folder.owner:
@@ -1857,7 +1857,7 @@ class BinFileAPIView(APIView):
             file_id = serializer.validated_data['file_id']  # Extract validated file_id
 
             try:
-                file = File.objects.get(id=file_id)
+                file = File.objects.all_with_binned().get(id=file_id)
                 if not file.is_editor(request.user.id):
                     if not file.has_perm(request.user.id):
                         return Response({"status": 403, "responseText": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
