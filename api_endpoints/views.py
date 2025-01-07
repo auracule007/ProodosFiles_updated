@@ -5,6 +5,7 @@ import zipfile
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 import hashlib
+.,/../
 import os
 import re
 import shutil
